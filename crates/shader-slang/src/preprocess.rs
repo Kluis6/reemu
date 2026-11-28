@@ -5,6 +5,7 @@
 //!   primeiro `#pragma stage` vai pros DOIS estágios; depois, só pro estágio
 //!   nomeado.
 //! - `#pragma name X` — nome do passe (aliases/feedback).
+//! - `#pragma format X` — formato de saída do passe.
 //! - `#pragma parameter NAME "Rótulo" default min max [step]` — tunável.
 //! - `#version` é normalizado pra uma linha só no topo de cada estágio.
 
@@ -27,6 +28,8 @@ pub struct Parameter {
 pub struct SlangSource {
     /// `#pragma name` (se houver).
     pub name: Option<String>,
+    /// `#pragma format` (se houver).
+    pub format: Option<String>,
     pub vertex_glsl: String,
     pub fragment_glsl: String,
     pub parameters: Vec<Parameter>,
@@ -100,6 +103,7 @@ fn flatten_includes(
 fn split(src: &str) -> SlangSource {
     let mut version = "#version 450".to_string();
     let mut name = None;
+    let mut format = None;
     let mut params = Vec::new();
     let mut common = String::new();
     let mut vert = String::new();
@@ -125,6 +129,10 @@ fn split(src: &str) -> SlangSource {
             }
             if let Some(n) = rest.strip_prefix("name") {
                 name = Some(n.trim().to_string());
+                continue;
+            }
+            if let Some(f) = rest.strip_prefix("format") {
+                format = f.split_whitespace().next().map(str::to_owned);
                 continue;
             }
             if let Some(p) = rest.strip_prefix("parameter") {
@@ -155,6 +163,7 @@ fn split(src: &str) -> SlangSource {
     let assemble = |body: &str| format!("{version}\n{common}\n{body}");
     SlangSource {
         name,
+        format,
         vertex_glsl: assemble(&vert),
         fragment_glsl: assemble(&frag),
         parameters: params,

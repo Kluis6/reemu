@@ -138,12 +138,22 @@ pub struct CompiledSlang {
 }
 
 pub fn compile(src: &SlangSource) -> Result<CompiledSlang, CompileError> {
-    let (frag, textures) = rewrite(&src.fragment_glsl, Stage::Fragment);
+    let (frag, mut textures) = rewrite(&src.fragment_glsl, Stage::Fragment);
     let (vert, _) = rewrite(&src.vertex_glsl, Stage::Vertex);
 
     let (vertex_wgsl, vert_module) = compile_stage(&vert, glslang::ShaderStage::Vertex, "vertex")?;
     let (fragment_wgsl, frag_module) =
         compile_stage(&frag, glslang::ShaderStage::Fragment, "fragment")?;
+    // O rewrite distribui bindings antes do pré-processador GLSL. Só as
+    // texturas do ramo ativo de um #if existem no módulo compilado.
+    textures.retain(|texture| {
+        frag_module.global_variables.iter().any(|(_, global)| {
+            global
+                .binding
+                .as_ref()
+                .is_some_and(|binding| binding.group == 0 && binding.binding == texture.tex_binding)
+        })
+    });
     // Reflete os DOIS estágios e une por binding — o `UBO` (MVP/sizes) costuma
     // aparecer só no vertex, o `Push` (params) só no fragment.
     let mut uniforms = reflect_all(&frag_module)?;
@@ -1942,6 +1952,25 @@ void main() {
         );
         assert_eq!(f("FrameCount").map(|f| f.kind), Some(UniformFieldKind::U32));
         assert_eq!(f("SCANLINE").map(|f| f.kind), Some(UniformFieldKind::F32));
+    }
+
+    #[test]
+    fn ignores_sampler_in_inactive_glsl_branch() {
+        let shader = CRT_SLANG.replace(
+            "layout(set = 0, binding = 2) uniform sampler2D Source;",
+            concat!(
+                "#if 0\n",
+                "layout(set = 0, binding = 2) uniform sampler2D InactiveAlias;\n",
+                "#else\n",
+                "layout(set = 0, binding = 2) uniform sampler2D Source;\n",
+                "#endif",
+            ),
+        );
+        let compiled = compile(&preprocess_str(&shader)).unwrap();
+        assert_eq!(compiled.textures.len(), 1);
+        let source = &compiled.textures[0];
+        assert_eq!(source.semantic, TextureSemantic::Source);
+        assert_eq!((source.tex_binding, source.samp_binding), (4, 5));
     }
 
     #[test]

@@ -1,20 +1,21 @@
 import {
   Button,
+  Card,
   Caption1,
   Field,
   Input,
-  Select,
+  Subtitle2,
   Textarea,
   makeStyles,
-  mergeClasses,
   tokens,
 } from "@fluentui/react-components";
-import { ArrowUploadRegular } from "@fluentui/react-icons";
-import { useRef } from "react";
+import { ArrowUploadRegular, ImageRegular } from "@fluentui/react-icons";
+import { useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { readGameArtworkFile, type GameMetadata, type GameMetadataEdits } from "../lib/tauri";
 import { formatReleaseDate } from "../lib/metadataFormat";
 import { inNavMode } from "../lib/focusNav";
+import { SelectBlock } from "./SettingBlock";
 
 const textFields = [
   ["releaseDate", "game.release"],
@@ -124,23 +125,53 @@ export function validMetadataDraft(draft: GameMetadataEdits) {
 }
 
 const useStyles = makeStyles({
+  fieldsContainer: { containerType: "inline-size", containerName: "game-metadata-fields" },
   fields: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))",
+    gridTemplateColumns: "minmax(0, 1fr)",
+    gap: tokens.spacingHorizontalL,
+    "@container game-metadata-fields (min-width: 390px)": {
+      gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    },
+    "@container game-metadata-fields (min-width: 840px)": {
+      gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    },
+  },
+  artGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, max(310px, 40%)), 1fr))",
     gap: tokens.spacingHorizontalL,
   },
-  uploadGrid: {
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    "@media (max-width: 1050px)": { gridTemplateColumns: "minmax(0, 1fr)" },
+  art: {
+    minWidth: 0,
+    gap: tokens.spacingVerticalM,
+    padding: tokens.spacingHorizontalL,
+    backgroundColor: "var(--reemuControlFill)",
+    boxShadow: "none",
   },
-  art: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalS, minWidth: 0 },
+  artTitle: { margin: 0 },
+  artBody: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
+    alignItems: "start",
+    gap: tokens.spacingHorizontalM,
+  },
+  artControls: { display: "grid", gap: tokens.spacingVerticalM, minWidth: 0 },
+  artActions: { display: "flex", flexWrap: "wrap", gap: tokens.spacingHorizontalS },
   preview: {
-    width: "100%",
-    height: "112px",
-    objectFit: "contain",
+    position: "relative",
+    display: "grid",
+    placeContent: "center",
+    justifyItems: "center",
+    gap: tokens.spacingVerticalXS,
+    height: "132px",
+    overflow: "hidden",
     borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: tokens.colorNeutralBackground3,
+    backgroundColor: "var(--reemuSurface1)",
+    color: tokens.colorNeutralForeground3,
   },
+  previewImage: { position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" },
+  previewIcon: { fontSize: "24px" },
   facts: { display: "grid", gap: tokens.spacingVerticalS, margin: 0 },
   fact: {
     display: "grid",
@@ -150,6 +181,24 @@ const useStyles = makeStyles({
   label: { color: tokens.colorNeutralForeground3 },
   value: { margin: 0, overflowWrap: "anywhere" },
 });
+
+function ArtworkPreview({ url, label }: { url: string | undefined; label: string }) {
+  const { t } = useTranslation();
+  const s = useStyles();
+  const [failed, setFailed] = useState(false);
+  return (
+    <div className={s.preview}>
+      {url && !failed ? (
+        <img className={s.previewImage} src={url} alt={label} onError={() => setFailed(true)} />
+      ) : (
+        <>
+          <ImageRegular className={s.previewIcon} aria-hidden />
+          <Caption1>{t("game.catalog.noImage")}</Caption1>
+        </>
+      )}
+    </div>
+  );
+}
 
 export function GameCatalogFacts({ catalog }: { catalog: GameMetadata["gamekave"] | undefined }) {
   const { t, i18n } = useTranslation();
@@ -207,16 +256,18 @@ export function GameMetadataFields({
       <Field label={t("game.description")}>
         <Textarea rows={4} value={draft.description ?? ""} onChange={(_, data) => onChange("description", data.value)} />
       </Field>
-      <div className={s.fields}>
-        {textFields.map(([key, label]) => (
-          <Field key={key} label={t(label)}>
-            <Input
-              value={draft[key] ?? ""}
-              inputMode={key === "rating" ? "numeric" : undefined}
-              onChange={(_, data) => onChange(key, data.value)}
-            />
-          </Field>
-        ))}
+      <div className={s.fieldsContainer}>
+        <div className={s.fields}>
+          {textFields.map(([key, label]) => (
+            <Field key={key} label={t(label)}>
+              <Input
+                value={draft[key] ?? ""}
+                inputMode={key === "rating" ? "numeric" : undefined}
+                onChange={(_, data) => onChange(key, data.value)}
+              />
+            </Field>
+          ))}
+        </div>
       </div>
       <GameCatalogFacts catalog={catalog} />
     </>
@@ -234,53 +285,70 @@ export function GameArtworkFields({
 }) {
   const { t } = useTranslation();
   const s = useStyles();
+  const id = useId();
   return (
-    <div className={mergeClasses(s.fields, !!onUpload && s.uploadGrid)}>
+    <div className={s.artGrid}>
       {artFields.map(([key, label, source]) => {
         const value = draft[key] ?? "";
         const options = source ? catalog?.[source] ?? [] : [];
         const local = isLocalArtwork(value);
         const preview = local ? value : imageUrl(value);
+        const invalid = !!value.trim() && !preview;
+        const title = t(label);
+        const titleId = `${id}-${key}`;
         return (
-          <div key={key} className={s.art}>
-            {preview && <img key={preview} className={s.preview} src={preview} alt={t(label)} />}
-            {options.length > 0 && (
-              <Field label={t("game.catalog.chooseArt", { art: t(label) })}>
-                <Select disabled={disabled} value={options.includes(value) ? value : ""} onChange={(_, data) => {
-                  if (data.value) onChange(key, data.value);
-                }}>
-                  <option value="" disabled>{t("game.catalog.chooseImage")}</option>
-                  {options.map((url, index) => (
-                    <option key={url} value={url}>
-                      {t("game.catalog.imageNumber", { number: index + 1 })}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            )}
-            <Field
-              label={t("game.catalog.artUrl", { art: t(label) })}
-              validationState={value.trim() && !preview ? "error" : "none"}
-              validationMessage={value.trim() && !preview ? t("game.catalog.invalidUrl") : undefined}
-            >
-              <Input disabled={disabled} type="url" value={local ? "" : value} onChange={(_, data) => onChange(key, data.value)} />
-            </Field>
-            {onUpload && (
-              <ArtworkUpload
-                label={t("game.catalog.uploadArt", { art: t(label) })}
-                disabled={disabled}
-                onFile={(file) => onUpload(key, file)}
-              />
-            )}
-            {local && (
-              <>
-                <Caption1>{t("game.catalog.localArt")}</Caption1>
-                <Button appearance="subtle" disabled={disabled} onClick={() => onChange(key, "")}>
-                  {t("game.catalog.removeLocalArt", { art: t(label) })}
-                </Button>
-              </>
-            )}
-          </div>
+          <Card key={key} appearance="filled-alternative" className={s.art} aria-labelledby={titleId}>
+            <Subtitle2 as="h3" id={titleId} className={s.artTitle}>{title}</Subtitle2>
+            <div className={s.artBody}>
+              <ArtworkPreview key={preview} url={preview} label={title} />
+              <div className={s.artControls}>
+                {options.length > 0 && (
+                  <SelectBlock
+                    compact
+                    label={t("game.catalog.chooseArt", { art: title })}
+                    placeholder={t("game.catalog.chooseImage")}
+                    disabled={disabled}
+                    value={value}
+                    options={options.map((url, index) => ({
+                      value: url,
+                      label: t("game.catalog.imageNumber", { number: index + 1 }),
+                    }))}
+                    onChange={(url) => onChange(key, url)}
+                  />
+                )}
+                <Field
+                  label={t("game.catalog.artUrl", { art: title })}
+                  validationState={invalid ? "error" : "none"}
+                  validationMessage={invalid ? t("game.catalog.invalidUrl") : undefined}
+                >
+                  <Input
+                    appearance="filled-darker"
+                    disabled={disabled}
+                    type="url"
+                    value={local ? "" : value}
+                    onChange={(_, data) => onChange(key, data.value)}
+                  />
+                </Field>
+                {local && <Caption1>{t("game.catalog.localArt")}</Caption1>}
+                {(onUpload || local) && (
+                  <div className={s.artActions}>
+                    {onUpload && (
+                      <ArtworkUpload
+                        label={t("game.catalog.uploadArt", { art: title })}
+                        disabled={disabled}
+                        onFile={(file) => onUpload(key, file)}
+                      />
+                    )}
+                    {local && (
+                      <Button appearance="secondary" disabled={disabled} onClick={() => onChange(key, "")}>
+                        {t("game.catalog.removeLocalArt", { art: title })}
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
         );
       })}
     </div>

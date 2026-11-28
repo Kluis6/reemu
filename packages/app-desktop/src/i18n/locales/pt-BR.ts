@@ -446,6 +446,7 @@ const ptBR = {
       gamelog: 'Meu Log',
     },
     catalog: {
+      noImage: 'Sem imagem',
       data: 'Dados',
       uploadArt: 'Carregar {{art}}',
       localArt: 'Imagem do seu dispositivo',
@@ -1560,6 +1561,9 @@ const ptBR = {
     },
   },
   collection: {
+    unlinked: 'Vincule este jogo ao catálogo para gerenciar sua coleção no Alvanista.',
+    unavailable: 'Não foi possível carregar o status deste jogo no Alvanista.',
+    autoSave: 'As alterações desta aba são salvas no Alvanista na hora.',
     connectPrompt: 'Vincule sua coleção do Alvanista para marcar posse, jornada e lista de desejos.',
     connectButton: 'Conectar à minha Coleção',
     connecting: 'Aguardando no navegador…',

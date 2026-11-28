@@ -445,6 +445,7 @@ const en: Messages = {
       gamelog: 'My Log',
     },
     catalog: {
+      noImage: 'No image',
       data: 'Details',
       uploadArt: 'Upload {{art}}',
       localArt: 'Image from your device',
@@ -1559,6 +1560,9 @@ const en: Messages = {
     },
   },
   collection: {
+    unlinked: 'Link this game to the catalog to manage it in your Alvanista collection.',
+    unavailable: 'Could not load this game’s status from Alvanista.',
+    autoSave: 'Changes on this tab are saved to Alvanista immediately.',
     connectPrompt: 'Link your Alvanista collection to track ownership, journey, and wishlist.',
     connectButton: 'Connect to my Collection',
     connecting: 'Waiting in browser…',

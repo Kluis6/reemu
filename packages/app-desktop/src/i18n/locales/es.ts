@@ -445,6 +445,7 @@ const es: Messages = {
       gamelog: 'Mi Log',
     },
     catalog: {
+      noImage: 'Sin imagen',
       data: 'Datos',
       uploadArt: 'Cargar {{art}}',
       localArt: 'Imagen de tu dispositivo',
@@ -1559,6 +1560,9 @@ const es: Messages = {
     },
   },
   collection: {
+    unlinked: 'Vincula este juego al catálogo para gestionarlo en tu colección de Alvanista.',
+    unavailable: 'No se pudo cargar el estado de este juego en Alvanista.',
+    autoSave: 'Los cambios en esta pestaña se guardan al instante en Alvanista.',
     connectPrompt: 'Vincula tu colección de Alvanista para marcar posesión, progreso y lista de deseos.',
     connectButton: 'Conectar a mi Colección',
     connecting: 'Esperando en el navegador…',

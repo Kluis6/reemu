@@ -42,6 +42,7 @@ import { errorToast, sysToast } from '../../lib/toast'
 import { useToastStore } from '../../stores/useToastStore'
 import { biosNote } from '../../lib/backendText'
 import { LIST_ICON_ACTION_WIDTH, ListIconAction } from '../../components/ListIconAction'
+import { useSettingsListStyles } from '../../styles/settingsList'
 import { Trans, useTranslation } from 'react-i18next'
 
 // Colunas fixas (iguais em todas as linhas): situação e botão, como na
@@ -99,23 +100,6 @@ const useStyles = makeStyles({
     '@media (max-width: 760px)': { gridTemplateColumns: `minmax(0, 1fr) auto ${LIST_ICON_ACTION_WIDTH}` },
   },
   lead: { display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalM, minWidth: 0 },
-  // ícone de BIOS (peça de quebra-cabeça, o do card no hub) num quadrado
-  tile: {
-    width: '48px',
-    height: '48px',
-    flexShrink: 0,
-    display: 'grid',
-    placeItems: 'center',
-    borderRadius: tokens.borderRadiusMedium,
-    // Cor sólida do tema com o ícone na cor de contraste dela (o par do
-    // tema, `reemuBrandSolid`/`reemuOnBrand`), como os ícones coloridos da
-    // Store: destaca do cinza da linha em qualquer tema. Com o
-    // `Background3` neutro (e depois o `BrandBackground2`), nos temas
-    // claros o quadrado sumia (print do usuário).
-    backgroundColor: 'var(--reemuBrandSolid)',
-    color: 'var(--reemuOnBrand)',
-    fontSize: '28px',
-  },
   meta: {
     display: 'flex',
     flexDirection: 'column',
@@ -124,7 +108,7 @@ const useStyles = makeStyles({
     overflowWrap: 'anywhere',
   },
   note: { color: tokens.colorNeutralForeground3 },
-  // selo da situação: não quebra nem vaza da pílula
+  // Status e avisos ficam na mesma coluna.
   status: { minWidth: 0, whiteSpace: 'nowrap' },
 })
 
@@ -136,6 +120,7 @@ const sameKey = (a?: Key, b?: Key) => a?.systemId === b?.systemId && a?.filename
 export function SettingsBios() {
   const { t } = useTranslation()
   const styles = useStyles()
+  const itemStyles = useSettingsListStyles()
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
   const bios = useQuery({ queryKey: ['bios-status'], queryFn: () => listBiosStatus(), retry: false })
@@ -279,20 +264,24 @@ export function SettingsBios() {
             <div className={styles.list}>
               {files.map((f) => {
                 const key: Key = { systemId, filename: f.filename }
+                const ready = f.present && f.hashOk !== false
                 const busy =
                   (doImport.isPending && sameKey(doImport.variables, key)) ||
                   (doRemove.isPending && sameKey(doRemove.variables, key))
                 return (
                   <div key={f.filename} className={styles.row}>
                     <span className={styles.lead}>
-                      <span className={styles.tile} aria-hidden>
+                      <span className={itemStyles.tile} aria-hidden>
                         <PuzzlePieceRegular />
                       </span>
                       <span className={styles.meta}>
-                        <Body1>
-                          <code>{shownName(f)}</code>
+                        <Body1 className={itemStyles.titleLine}>
+                          <span className={itemStyles.titleName}>
+                            <code>{shownName(f)}</code>
+                            {ready && <CheckmarkCircleFilled className={itemStyles.installedCheck} aria-hidden />}
+                          </span>
                           {f.required && (
-                            <Badge appearance="tint" color="danger" style={{ marginLeft: 8 }}>
+                            <Badge appearance="tint" color="danger">
                               {t('bios.required')}
                             </Badge>
                           )}
@@ -303,21 +292,13 @@ export function SettingsBios() {
                       </span>
                     </span>
                     <span className={styles.status}>
-                      {!f.present && (
-                        <Badge appearance="tint" color={f.required ? 'danger' : 'informative'}>
-                          {t('bios.missing')}
-                        </Badge>
-                      )}
+                      {!f.present && <Body1>{t('bios.missing')}</Body1>}
                       {f.present && f.hashOk === false && (
                         <Badge appearance="tint" color="warning" icon={<WarningFilled />}>
                           {t('bios.hashMismatch')}
                         </Badge>
                       )}
-                      {f.present && f.hashOk !== false && (
-                        <Badge appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
-                          {t('bios.present')}
-                        </Badge>
-                      )}
+                      {ready && <Body1>{t('bios.present')}</Body1>}
                     </span>
                     {f.present ? (
                       <ListIconAction
@@ -348,22 +329,19 @@ export function SettingsBios() {
           </Body1>
           <div className={styles.row}>
             <span className={styles.lead}>
-              <span className={styles.tile} aria-hidden>
+              <span className={itemStyles.tile} aria-hidden>
                 <PuzzlePieceRegular />
               </span>
               <span className={styles.meta}>
-                <Body1>
+                <Body1 className={itemStyles.titleName}>
                   <code>PPSSPP/</code>
+                  {ppsspp.data && <CheckmarkCircleFilled className={itemStyles.installedCheck} aria-hidden />}
                 </Body1>
                 <Caption1 className={styles.note}>{t('bios.ppssppNote')}</Caption1>
               </span>
             </span>
             <span className={styles.status}>
-              {ppsspp.data && (
-                <Badge appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
-                  {t('bios.installed')}
-                </Badge>
-              )}
+              {ppsspp.data && <Body1>{t('bios.installed')}</Body1>}
             </span>
             {/* baixar em primary; já instalado, atualizar em secondary */}
             <ListIconAction

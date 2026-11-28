@@ -27,6 +27,9 @@ import { floatingDrawer } from "../styles/xbox";
 import { CloseButton } from "./CloseButton";
 import { RailIconBadge } from "./RailIconBadge";
 
+const BODY_INSET = 10;
+const ITEM_INSET = 16;
+
 const useStyles = makeStyles({
   // Flutuante à esquerda, como o drawer de perfil e o menu de pausa.
   drawer: {
@@ -35,17 +38,13 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground2,
     color: tokens.colorNeutralForeground1,
   },
-  // Cabeçalho com a mesma margem do corpo (24): o X termina na borda dos cards.
-  // Laterais do drawer de perfil: 10 na lista (o respiro de 16 fica dentro de
-  // cada item). O cabeçalho acompanha: o título começa onde começa o texto do
-  // filtro e o ícone dos itens (10 + 16), e o X termina na borda deles (10).
+  // O título começa na borda do bloco de filtro.
   // O Fluent puxa o botão de ação 8 px pra fora; aqui ele para na margem.
   header: {
-    paddingLeft: "26px",
-    paddingRight: "10px",
+    paddingInline: `${BODY_INSET}px`,
     "& .fui-DrawerHeaderTitle__action": { marginRight: 0 },
   },
-  body: { paddingLeft: "10px", paddingRight: "10px" },
+  body: { paddingInline: `${BODY_INSET}px` },
   // Filtro "só não lidas" numa faixa preenchida, como no app Xbox.
   filter: {
     display: "flex",
@@ -53,7 +52,7 @@ const useStyles = makeStyles({
     justifyContent: "space-between",
     columnGap: tokens.spacingHorizontalM,
     marginTop: "8px",
-    padding: "6px 4px 6px 16px",
+    padding: `6px 4px 6px ${ITEM_INSET}px`,
     borderRadius: tokens.borderRadiusMedium,
     backgroundColor: tokens.colorNeutralBackground3,
   },
@@ -76,7 +75,7 @@ const useStyles = makeStyles({
     columnGap: "16px",
     width: "100%",
     maxWidth: "none",
-    padding: "8px 16px",
+    padding: `8px ${ITEM_INSET}px`,
     textAlign: "left",
     fontWeight: tokens.fontWeightRegular,
     borderTopColor: "transparent",
@@ -118,8 +117,10 @@ const useStyles = makeStyles({
   summary: { color: tokens.colorNeutralForeground2 },
   time: { color: tokens.colorNeutralForeground3, whiteSpace: "nowrap", flexShrink: 0 },
   empty: {
+    display: "block",
     color: tokens.colorNeutralForeground3,
-    paddingTop: "20px",
+    paddingTop: tokens.spacingVerticalM,
+    paddingInline: `${ITEM_INSET}px`,
   },
 });
 

@@ -168,12 +168,10 @@ describe('AlvanistaCollectionBar', () => {
       system: 'snes',
     })
 
-    const wishlistBtn = [...view.host.querySelectorAll('button')].find(
-      (b) => b.getAttribute('aria-pressed') === 'false',
-    )
-    expect(wishlistBtn).toBeTruthy()
+    const switches = view.host.querySelectorAll<HTMLInputElement>('input[role="switch"]')
+    expect([...switches].map((input) => input.checked)).toEqual([true, false])
     await act(async () => {
-      wishlistBtn!.click()
+      switches[1].click()
     })
     await flush()
 

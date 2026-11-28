@@ -19,7 +19,6 @@ import {
   Tab,
   TabList,
   Tooltip,
-  tokens,
 } from "@fluentui/react-components";
 import {
   ArrowSyncRegular,
@@ -37,13 +36,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FullscreenDialog } from "../components/FullscreenDialog";
-import { AlvanistaCollectionBar } from "../components/catalog/AlvanistaCollectionBar";
+import { AlvanistaCollectionBar, AlvanistaCollectionConnectPrompt } from "../components/catalog/AlvanistaCollectionBar";
 import { PickGameDialog } from "../components/catalog/PickGameDialog";
 import { ConflictDialog } from "../components/sync/ConflictDialog";
 import { SaveLine } from "../components/sync/SaveLine";
 import { GamePresets } from "../components/GamePresets";
 import { GameImageOptions } from "../components/GameImageOptions";
-import { SelectBlock } from "../components/SettingBlock";
+import { FieldBlock, SelectBlock } from "../components/SettingBlock";
 import { SearchArt } from "../components/EmptyArt";
 import { EmptyState, LoadingState } from "../components/EmptyState";
 import { CheatsPanel } from "../components/CheatsPanel";
@@ -56,7 +55,9 @@ import {
   GameCatalogFacts,
   GameMetadataFields,
   gameMetadataDraft,
+  readGameArtwork,
   validMetadataDraft,
+  type GameArtworkKey,
 } from "../components/GameMetadataFields";
 import type { GameMetadataEdits } from "../lib/tauri";
 import { RemoteStateList } from "../components/sync/RemoteStateList";
@@ -93,6 +94,7 @@ import {
   listRoms,
   listSaveStates,
   listSystemCores,
+  pickImage,
   removeRom,
   setRomFavorite,
   setRomMetadata,
@@ -102,6 +104,7 @@ import {
 } from "../lib/tauri";
 import { conflictFor } from "../hooks/useSync";
 import { useCatalogStatus } from "../hooks/useCatalog";
+import { useAlvanistaCollectionItem } from "../hooks/useCollection";
 import { formatPlayTime } from "../lib/playTime";
 import { useModalButtonStyles } from "../styles/buttons";
 import { useDetailStyles, useTabStyles } from "../styles/xbox";
@@ -255,7 +258,7 @@ export function RomDetail() {
   // mostrá-la. Fora disso, abre no hover/foco como as outras.
   const [removeTipHover, setRemoveTipHover] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const [editTab, setEditTab] = useState<"details" | "artwork">("details");
+  const [editTab, setEditTab] = useState<"details" | "artwork" | "alvanista">("details");
   const [editDetails, setEditDetails] = useState<GameMetadataEdits>({});
   const [originalDetails, setOriginalDetails] = useState<GameMetadataEdits>({});
   const [originalEditName, setOriginalEditName] = useState("");
@@ -305,6 +308,9 @@ export function RomDetail() {
   const [panel, setPanel] = useState<"states" | "shader" | "cheats" | "achievements" | "gamelog" | "media" | null>(initialPanel);
   const hasShaderCfg = !!shaderInfo.data?.gpu;
   const gameUuid = meta.data?.gameUuid;
+  const { connected, hasScope, itemQuery, needsAccess } = useAlvanistaCollectionItem(gameUuid);
+  const inAlvanistaCollection =
+    connected && hasScope && itemQuery.isSuccess && itemQuery.data?.inCollection === true;
   const catalog = meta.data?.gamekave;
   const heroUrl = catalogMediaUrl(gameUuid, meta.data?.fanartUrl, "hero", 0);
   const logoUrl = catalogMediaUrl(gameUuid, meta.data?.logoUrl, "logo", 0);
@@ -375,17 +381,30 @@ export function RomDetail() {
         Object.keys(metadataEdits).length ? metadataEdits : undefined,
       );
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["roms"] });
-      qc.invalidateQueries({ queryKey: ["rom-metadata", romId] });
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["roms"] }),
+        qc.invalidateQueries({ queryKey: ["rom-metadata", romId] }),
+      ]);
       setEditOpen(false);
       push(sysToast(t("game.updated"), "Success"));
     },
     onError: (e) => push(errorToast(e, "saveChanges")),
   });
+  const uploadArtwork = useMutation({
+    mutationFn: async ({ file }: { key: GameArtworkKey; file?: File }) => {
+      const selected = file ?? await pickImage();
+      return selected ? readGameArtwork(selected) : null;
+    },
+    onSuccess: (url, { key }) => {
+      if (url) setEditDetails((previous) => ({ ...previous, [key]: url }));
+    },
+  });
+  const editBusy = editMeta.isPending || uploadArtwork.isPending;
   const openEdit = () => {
     const name = rom?.userTitle ?? meta.data?.title ?? rom?.title ?? "";
     const fields = gameMetadataDraft(meta.data);
+    uploadArtwork.reset();
     setOriginalEditName(name);
     setOriginalDetails(fields);
     setEditDetails(fields);
@@ -553,7 +572,7 @@ export function RomDetail() {
               <Text as="h1" className={s.title}>
                 {title}
               </Text>
-              {(activeRegion || releaseYear || genres[0]) && (
+              {(activeRegion || releaseYear || genres[0] || inAlvanistaCollection) && (
                 <div className={s.badges}>
                   {activeRegion && (
                     <Badge className={s.badge} color="informative" data-testid="rom-region-badge">
@@ -565,6 +584,9 @@ export function RomDetail() {
                   )}
                   {genres[0] && (
                     <Badge className={s.badge} color="informative">{genres[0]}</Badge>
+                  )}
+                  {inAlvanistaCollection && (
+                    <Badge className={s.badge} color="informative">{t("collection.inCollection")}</Badge>
                   )}
                 </div>
               )}
@@ -667,12 +689,9 @@ export function RomDetail() {
               </div>
             )}
             <SaveLine romId={romId} className={s.heroStats} iconClassName={s.heroStatsIcon} />
-            <AlvanistaCollectionBar
-              gameUuid={gameUuid}
-              systemId={rom.systemId}
-              playTimeSeconds={playTime.data ?? 0}
-              className={s.heroStats}
-            />
+            {needsAccess && (
+              <AlvanistaCollectionConnectPrompt connected={connected} className={s.heroStats} />
+            )}
           </Card>
           {/* Só depois de carregar a lista de cores: antes ela vem vazia e o
               aviso piscava ao abrir a página. */}
@@ -694,18 +713,21 @@ export function RomDetail() {
       <FullscreenDialog
         open={editOpen}
         title={t("game.editTitle")}
-        onClose={() => setEditOpen(false)}
+        onClose={() => { if (!editBusy) setEditOpen(false); }}
+        contentClassName={s.editMetadataContent}
         actions={
           <>
             <Button
               appearance="secondary"
+              disabledFocusable={editBusy}
               onClick={() => setEditOpen(false)}
             >
               {t("common.cancel")}
             </Button>
             <Button
               appearance="primary"
-              disabled={editMeta.isPending || !validMetadataDraft(metadataEdits)}
+              aria-busy={editMeta.isPending}
+              disabled={editBusy || !validMetadataDraft(metadataEdits)}
               onClick={() => editMeta.mutate()}
             >
               {t("common.save")}
@@ -715,9 +737,12 @@ export function RomDetail() {
       >
         <div className={mergeClasses(s.editMetadataFields, s.editMetadataDialog)}>
           <TabList
+            className={mergeClasses(tb.tabs, s.editMetadataTabs)}
             aria-label={t("game.editTitle")}
             selectedValue={editTab}
-            onTabSelect={(_, { value }) => setEditTab(value === "artwork" ? "artwork" : "details")}
+            onTabSelect={(_, { value }) => {
+              if (value === "details" || value === "artwork" || value === "alvanista") setEditTab(value);
+            }}
           >
             <Tab value="details" id="edit-game-details-tab" aria-controls="edit-game-details">
               {t("game.about")}
@@ -725,21 +750,26 @@ export function RomDetail() {
             <Tab value="artwork" id="edit-game-artwork-tab" aria-controls="edit-game-artwork">
               {t("game.catalog.artwork")}
             </Tab>
+            <Tab value="alvanista" id="edit-game-alvanista-tab" aria-controls="edit-game-alvanista">
+              Alvanista
+            </Tab>
           </TabList>
           <div id="edit-game-details" role="tabpanel" aria-labelledby="edit-game-details-tab" hidden={editTab !== "details"}>
             <div className={s.editMetadataFields}>
-              <Field label={t("common.name")}>
-                <Input
-                  value={editName}
-                  onChange={(_, d) => setEditName(d.value)}
-                  placeholder={rom.title}
-                />
-              </Field>
-              {/* seletor no padrão dos blocos (o mesmo da página do jogo) */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <div className={s.editIdentityFields}>
+                <FieldBlock>
+                  <Field label={t("common.name")}>
+                    <Input
+                      value={editName}
+                      onChange={(_, d) => setEditName(d.value)}
+                      placeholder={rom.title}
+                    />
+                  </Field>
+                </FieldBlock>
                 <SelectBlock
                   raised
                   label={t("common.platform")}
+                  description={t("game.platformHint")}
                   value={editSystem}
                   options={[
                     ...(knownPlatforms().some(([id]) => id === editSystem)
@@ -749,7 +779,7 @@ export function RomDetail() {
                   ]}
                   onChange={setEditSystem}
                 />
-                <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                <Caption1 className={s.editPlatformHint}>
                   {t("game.platformHint")}
                 </Caption1>
               </div>
@@ -757,7 +787,29 @@ export function RomDetail() {
             </div>
           </div>
           <div id="edit-game-artwork" role="tabpanel" aria-labelledby="edit-game-artwork-tab" hidden={editTab !== "artwork"}>
-            <GameArtworkFields draft={editDetails} catalog={catalog} onChange={updateGameField} />
+            <div className={s.editMetadataFields}>
+              {uploadArtwork.isError && (
+                <MessageBar intent="error">
+                  <MessageBarBody>{t("game.catalog.invalidArtFile")}</MessageBarBody>
+                </MessageBar>
+              )}
+              <GameArtworkFields
+                draft={editDetails}
+                catalog={catalog}
+                disabled={editBusy}
+                onChange={updateGameField}
+                onUpload={(key, file) => uploadArtwork.mutate({ key, file })}
+              />
+            </div>
+          </div>
+          <div id="edit-game-alvanista" role="tabpanel" aria-labelledby="edit-game-alvanista-tab" hidden={editTab !== "alvanista"}>
+            {editOpen && (
+              <AlvanistaCollectionBar
+                gameUuid={gameUuid}
+                systemId={rom.systemId}
+                playTimeSeconds={playTime.data ?? 0}
+              />
+            )}
           </div>
         </div>
       </FullscreenDialog>

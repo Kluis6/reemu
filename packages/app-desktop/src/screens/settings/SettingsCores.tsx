@@ -38,6 +38,7 @@ import {
 } from '../../lib/tauri'
 import { useToastStore } from '../../stores/useToastStore'
 import { PAGE_PAD_B, SAFE_Y, SCROLLBAR_W } from '../../styles/metrics'
+import { useSettingsListStyles } from '../../styles/settingsList'
 import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { CoreInfoDialog } from './CoreInfo'
@@ -114,24 +115,7 @@ const useStyles = makeStyles({
     // baixo do nome
     '@media (max-width: 900px)': { gridTemplateColumns: `minmax(0, 1fr) ${ACTIONS_W}` },
   },
-  // ícone dentro de um quadrado (o "ícone do app" da Store)
   lead: { display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalM, minWidth: 0 },
-  tile: {
-    width: '48px',
-    height: '48px',
-    flexShrink: 0,
-    display: 'grid',
-    placeItems: 'center',
-    borderRadius: tokens.borderRadiusMedium,
-    // Cor sólida do tema com o ícone na cor de contraste dela (o par do
-    // tema, `reemuBrandSolid`/`reemuOnBrand`), como os ícones coloridos da
-    // Store: destaca do cinza da linha em qualquer tema. Com o
-    // `Background3` neutro (e depois o `BrandBackground2`), nos temas
-    // claros o quadrado sumia (print do usuário).
-    backgroundColor: 'var(--reemuBrandSolid)',
-    color: 'var(--reemuOnBrand)',
-    fontSize: '28px',
-  },
   // `minWidth: 0` deixa o texto quebrar dentro da coluna
   meta: {
     display: 'flex',
@@ -153,9 +137,7 @@ const useStyles = makeStyles({
   // Vulkan em vermelho (`danger` do Fluent), OpenGL em azul. O azul é fixo da
   // paleta do Fluent, não a cor de destaque, que muda com o tema; com o texto
   // branco passa de 4.5:1.
-  hwBadge: { marginLeft: '8px' },
   hwOpenGl: {
-    marginLeft: '8px',
     backgroundColor: tokens.colorPaletteBlueBorderActive,
     color: tokens.colorNeutralForegroundOnBrand,
   },
@@ -178,6 +160,7 @@ export function SettingsCores() {
 function Catalog() {
   const { t } = useTranslation()
   const styles = useStyles()
+  const itemStyles = useSettingsListStyles()
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
   const navigate = useNavigate()
@@ -345,19 +328,22 @@ function Catalog() {
         {sorted.map((c: CatalogCore) => (
           <div key={c.coreId} className={styles.row}>
             <span className={styles.lead}>
-              <span className={styles.tile} aria-hidden>
+              <span className={itemStyles.tile} aria-hidden>
                 <DeveloperBoardRegular />
               </span>
               <span className={styles.meta}>
-                <Body1>
-                  <Text as="strong" weight="semibold">{c.name}</Text>
+                <Body1 className={itemStyles.titleLine}>
+                  <span className={itemStyles.titleName}>
+                    <Text as="strong" weight="semibold">{c.name}</Text>
+                    {c.installed && <CheckmarkCircleFilled className={itemStyles.installedCheck} aria-hidden />}
+                  </span>
                   {c.hw === 'opengl' && (
                     <Badge appearance="filled" className={styles.hwOpenGl}>
                       OpenGL
                     </Badge>
                   )}
                   {c.hw === 'vulkan' && (
-                    <Badge appearance="filled" color="danger" className={styles.hwBadge}>
+                    <Badge appearance="filled" color="danger">
                       Vulkan
                     </Badge>
                   )}
@@ -365,6 +351,7 @@ function Catalog() {
                 <Caption1 className={styles.sub}>
                   <span className={styles.narrowOnly}>{c.systems} · </span>
                   {c.license}
+                  {c.installed && <span className={styles.narrowOnly}> · {t('cores.installedBadge')}</span>}
                 </Caption1>
               </span>
             </span>
@@ -376,9 +363,7 @@ function Catalog() {
                     {t('cores.updateBadge')}
                   </Badge>
                 ) : (
-                  <Badge className={styles.badge} appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
-                    {t('cores.installedBadge')}
-                  </Badge>
+                  <Body1>{t('cores.installedBadge')}</Body1>
                 ))}
             </span>
             <span className={styles.actions}>

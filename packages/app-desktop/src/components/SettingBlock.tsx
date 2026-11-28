@@ -29,6 +29,9 @@ const useStyles = makeStyles({
     gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))",
     gap: tokens.spacingHorizontalM,
   },
+  fillGrid: {
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(300px, 100%), 1fr))",
+  },
   block: {
     display: "flex",
     alignItems: "center",
@@ -95,12 +98,12 @@ const useStyles = makeStyles({
 });
 
 /** Grupo de blocos, com título opcional acima. */
-export function BlockGroup({ title, children }: { title?: string; children: ReactNode }) {
+export function BlockGroup({ title, children, fill }: { title?: string; children: ReactNode; fill?: boolean }) {
   const s = useStyles();
   return (
     <section className={s.group}>
       {title && <Body1 as="h3" style={{ margin: 0 }}>{title}</Body1>}
-      <div className={s.grid}>{children}</div>
+      <div className={mergeClasses(s.grid, fill && s.fillGrid)}>{children}</div>
     </section>
   );
 }
@@ -147,6 +150,7 @@ export function ToggleBlock({
 export function SelectBlock({
   label,
   description,
+  placeholder,
   value,
   options,
   disabled,
@@ -157,6 +161,7 @@ export function SelectBlock({
 }: {
   label: string;
   description?: string;
+  placeholder?: string;
   disabled?: boolean;
   value: string;
   options: readonly { value: string; label: string }[];
@@ -170,7 +175,7 @@ export function SelectBlock({
   const s = useStyles();
   const [open, setOpen] = useState(false);
   const popover = useRef<HTMLDivElement>(null);
-  const current = options.find((o) => o.value === value)?.label ?? "";
+  const current = options.find((o) => o.value === value)?.label ?? placeholder ?? "";
 
   // A lista abre com o item atual em foco, não com o primeiro.
   useEffect(() => {

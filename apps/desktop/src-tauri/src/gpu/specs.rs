@@ -80,15 +80,22 @@ pub(super) fn build_specs(want: &str) -> Result<BuiltSpecs, String> {
     let mut meta: Vec<shader_slang::Parameter> = Vec::new();
     let mut specs = Vec::new();
     let mut history_depth = 1usize;
-    // aliases só ficam conhecidos depois de ler todos os passes (um passe pode
-    // referenciar o alias de outro que vem depois? não — mas o alias pode não
-    // ser o `#pragma name`; usamos o `aliasN` do `.slangp`).
-    let aliases: Vec<Option<String>> = preset.passes.iter().map(|p| p.alias.clone()).collect();
+    let sources = preset
+        .passes
+        .iter()
+        .map(|pass| shader_slang::preprocess_file(&pass.shader_path))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    let aliases: Vec<_> = preset
+        .passes
+        .iter()
+        .zip(&sources)
+        .map(|(pass, source)| pass.alias.clone().or_else(|| source.name.clone()))
+        .collect();
     // um passe é fonte de feedback se `feedback_pass{i}` OU se algum passe
     // amostra `PassFeedback<i>` / `<aliasI>Feedback`.
     let mut needs_feedback = vec![false; preset.passes.len()];
-    for (i, pass) in preset.passes.iter().enumerate() {
-        let src = shader_slang::preprocess_file(&pass.shader_path).map_err(|e| e.to_string())?;
+    for (i, (pass, src)) in preset.passes.iter().zip(sources).enumerate() {
         for p in &src.parameters {
             if !params.contains_key(&p.name) {
                 params.insert(p.name.clone(), p.default);
@@ -121,12 +128,14 @@ pub(super) fn build_specs(want: &str) -> Result<BuiltSpecs, String> {
         if pass.feedback {
             needs_feedback[i] = true;
         }
-        let fmt = if pass.float_framebuffer {
-            wgpu::TextureFormat::Rgba16Float
-        } else if pass.srgb_framebuffer {
-            wgpu::TextureFormat::Rgba8UnormSrgb
-        } else {
-            FMT
+        // O formato declarado no shader tem precedência sobre os flags do preset.
+        let fmt = match src.format.as_deref() {
+            Some("R16G16B16A16_SFLOAT") => wgpu::TextureFormat::Rgba16Float,
+            Some("R8G8B8A8_SRGB") => wgpu::TextureFormat::Rgba8UnormSrgb,
+            Some("R8G8B8A8_UNORM") => FMT,
+            _ if pass.srgb_framebuffer => wgpu::TextureFormat::Rgba8UnormSrgb,
+            _ if pass.float_framebuffer => wgpu::TextureFormat::Rgba16Float,
+            _ => FMT,
         };
         specs.push(PassSpec {
             scale_x: pass.scale_x,
@@ -139,7 +148,7 @@ pub(super) fn build_specs(want: &str) -> Result<BuiltSpecs, String> {
             textures: compiled.textures,
             fmt,
             frame_count_mod: pass.frame_count_mod,
-            alias: pass.alias.clone(),
+            alias: aliases[i].clone(),
             feedback: false, // preenchido abaixo
             mipmap_input: pass.mipmap_input,
         });

@@ -15,6 +15,11 @@ import type { Ref } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TOOLTIP_POSITION } from '../lib/tooltip'
 
+const settingsButtonColors = {
+  backgroundColor: 'var(--reemuShaderOptionsBg)',
+  color: 'var(--reemuShaderOptionsIcon)',
+}
+
 const useStyles = makeStyles({
   // Card selecionável do Fluent: a superfície inteira escolhe o shader
   // (hover/foco mostram que dá pra clicar — "Card › Selectable" no Fluent 2).
@@ -30,39 +35,36 @@ const useStyles = makeStyles({
     // saía cortado. Com isso a lista rola.
     flexShrink: 0,
   },
-  // Escolhido: fundo na cor primária do tema (a do botão primary e do
-  // quadrado dos ícones), com o texto legível sobre ela (pedido do usuário,
-  // 2026-11-10). Antes era o `BrandBackground2`, um tom claro quase igual ao
-  // dos outros itens. Borda transparente de 1 px: o tamanho não muda. Sem o
-  // contorno que o `Card` do Fluent desenha no `::after` do selecionado
-  // (`colorNeutralStroke1Selected`; pedido do usuário, 2026-11-14): a cor do
-  // fundo já marca o escolhido.
+  // O fundo usa a cor de marca com contraste para texto branco.
   selected: {
     border: '1px solid transparent',
-    backgroundColor: 'var(--reemuBrandSolid)',
-    color: 'var(--reemuOnBrand)',
+    backgroundColor: 'var(--reemuSelectedShaderBg)',
+    color: '#fff',
     '::after': { ...shorthands.borderColor('transparent') },
     ':hover': {
-      backgroundColor: 'var(--reemuBrandSolid)',
+      backgroundColor: 'var(--reemuSelectedShaderBg)',
       '::after': { ...shorthands.borderColor('transparent') },
     },
     ':active': {
-      backgroundColor: 'var(--reemuBrandSolid)',
+      backgroundColor: 'var(--reemuSelectedShaderBg)',
       '::after': { ...shorthands.borderColor('transparent') },
     },
     '& .fui-Text, & .fui-Caption1, & .fui-CardHeader__description': {
-      color: 'var(--reemuOnBrand)',
+      color: '#fff',
     },
-    '& .fui-Button': { color: 'var(--reemuOnBrand)' },
   },
   disabled: { opacity: 0.5, cursor: 'default' },
   title: { display: 'inline-flex', alignItems: 'center', gap: tokens.spacingHorizontalXS },
   desc: { color: tokens.colorNeutralForeground3 },
-  // `outline` com a borda visível sobre o fundo do card: o `Stroke1` do
-  // tema tem quase a cor do card; o `StrokeAccessible` é o token do Fluent
-  // feito pra ficar visível (contraste de 3:1).
   settingsBtn: {
-    ...shorthands.borderColor(`${tokens.colorNeutralStrokeAccessible} !important`),
+    ...settingsButtonColors,
+    ...shorthands.borderColor('transparent'),
+    ':is(:hover, :focus, :active)': settingsButtonColors,
+    ':focus-visible': { outlineColor: `${tokens.colorBrandStroke1} !important` },
+  },
+  settingsBtnSelected: {
+    // O anel da marca pode coincidir com a cor do card selecionado.
+    ['--colorBrandStroke1' as string]: 'var(--reemuShaderOptionsFocus)',
   },
 })
 
@@ -148,8 +150,8 @@ export function ShaderCard({
           onSettings ? (
             <Tooltip positioning={TOOLTIP_POSITION} content={t('video.shaderSettings')} relationship="label">
               <Button
-                className={s.settingsBtn}
-                appearance="outline"
+                className={mergeClasses(s.settingsBtn, selected && s.settingsBtnSelected)}
+                appearance="secondary"
                 icon={<OptionsRegular />}
                 // o clique/tecla no botão não pode virar seleção do card
                 onClick={(e) => {

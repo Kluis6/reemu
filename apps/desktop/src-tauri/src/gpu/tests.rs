@@ -493,7 +493,7 @@ fn multipass_slang_with_history_and_feedback_runs() {
     std::fs::write(
         &pass0,
         [
-            "#version 450\n#pragma name First\n",
+            "#version 450\n#pragma name First\n#pragma format R16G16B16A16_SFLOAT\n",
             vs,
             "#pragma stage fragment\nlayout(location=0) in vec2 vUV;\n",
             "layout(location=0) out vec4 c;\n",
@@ -522,7 +522,7 @@ fn multipass_slang_with_history_and_feedback_runs() {
     .unwrap();
     std::fs::write(
         &slangp,
-        "shaders = 2\nshader0 = p0.slang\nalias0 = First\nfeedback_pass0 = true\nshader1 = p1.slang\n",
+        "shaders = 2\nshader0 = p0.slang\nshader1 = p1.slang\n",
     )
     .unwrap();
 
@@ -530,7 +530,8 @@ fn multipass_slang_with_history_and_feedback_runs() {
         .expect("preset multi-passe deve montar");
     assert_eq!(fp.passes.len(), 2);
     assert_eq!(fp.history_depth, 2, "OriginalHistory1 ⇒ 2 slots");
-    assert!(fp.passes[0].feedback, "feedback_pass0 + FirstFeedback");
+    assert!(fp.passes[0].feedback, "#pragma name First + FirstFeedback");
+    assert_eq!(fp.passes[0].fmt, wgpu::TextureFormat::Rgba16Float);
     assert!(
         fp.passes[0].feedback_target.is_none(),
         "alocado sob demanda"

@@ -1617,8 +1617,25 @@ export const useDetailStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground3,
   },
   galleryCaption: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
-  editMetadataDialog: { maxWidth: "1040px", marginInline: "auto", width: "100%" },
+  editMetadataContent: { scrollbarGutter: "stable" },
+  editMetadataDialog: {
+    width: "100%",
+    boxSizing: "border-box",
+    // Reserva espaço para o anel de foco dentro da área rolável do diálogo.
+    padding: "6px",
+  },
+  editMetadataTabs: { marginLeft: 0 },
   editMetadataFields: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL },
+  editIdentityFields: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, max(310px, 40%)), 1fr))",
+    columnGap: tokens.spacingHorizontalL,
+    rowGap: tokens.spacingVerticalS,
+  },
+  editPlatformHint: {
+    gridColumn: "-2 / -1",
+    color: tokens.colorNeutralForeground3,
+  },
   infoToolbar: {
     display: "flex",
     alignItems: "center",

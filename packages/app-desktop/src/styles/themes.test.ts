@@ -35,6 +35,7 @@ describe('tema de alto contraste', () => {
     ['texto secundário', t.colorNeutralForeground2, bg],
     ['texto de marca', t.reemuBrandText, bg],
     ['texto sobre a marca', t.reemuOnBrand, t.reemuBrandSolid],
+    ['shader selecionado', '#ffffff', t.reemuSelectedShaderBg],
     ['item selecionado', t.reemuActiveFg, t.reemuActiveBg],
   ])('%s passa AAA (7:1)', (_, fg, back) => {
     expect(contrast(fg, back)).toBeGreaterThanOrEqual(7)
@@ -42,6 +43,24 @@ describe('tema de alto contraste', () => {
 
   it('fundo sem as manchas de cor do tema', () => {
     expect([t.reemuBg1, t.reemuBg2, t.reemuBg3, t.reemuBg4]).toEqual([bg, bg, bg, bg])
+  })
+})
+
+describe('ícone das listas de configurações', () => {
+  it.each(Object.entries(THEMES))('mantém contraste com o ícone neutro no tema %s', (_, { theme }) => {
+    expect(contrast(theme.colorNeutralForeground1, theme.reemuSettingsTileBg)).toBeGreaterThanOrEqual(3)
+  })
+})
+
+describe('card de shader selecionado', () => {
+  it.each(Object.entries(THEMES))('mantém o texto branco legível no tema %s', (_, { theme }) => {
+    expect(contrast('#ffffff', theme.reemuSelectedShaderBg)).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it.each(Object.keys(THEMES) as ThemeId[])('mantém o anel de foco visível no tema %s', (id) => {
+    const { reemuShaderOptionsFocus: focus, reemuSelectedShaderBg: background } = THEMES[id].theme
+    expect(contrast(focus, background)).toBeGreaterThanOrEqual(3)
+    expect(focus.toLowerCase() === '#ffffff').toBe(familyOf(id).mode === 'light')
   })
 })
 

@@ -610,6 +610,13 @@ export interface ReEmuTokens extends ReEmuLiftTokens {
   reemuBrandSolid: string;
   /** Cor de texto legível sobre `reemuBrandSolid`. */
   reemuOnBrand: string;
+  /** Fundo de marca sob o ícone neutro nas listas de Configurações. */
+  reemuSettingsTileBg: string;
+  /** Fundo do card de shader selecionado, com contraste para texto branco. */
+  reemuSelectedShaderBg: string;
+  reemuShaderOptionsBg: string;
+  reemuShaderOptionsIcon: string;
+  reemuShaderOptionsFocus: string;
   /** Brilhos do fundo (`components/AnimatedBackground`), um por canto —
    *  ver `BgPalette`. */
   reemuBg1: string;
@@ -833,6 +840,17 @@ export function contrastRatio(a: string, b: string): number {
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
+function brandBackgroundFor(brand: string, foreground: string, minContrast: number): string {
+  const target = contrastRatio("#ffffff", foreground) > contrastRatio("#000000", foreground)
+    ? "#ffffff"
+    : "#000000";
+  let background = brand;
+  for (let shade = 5; contrastRatio(foreground, background) < minContrast; shade += 5) {
+    background = mixHex(brand, target, shade / 100);
+  }
+  return background;
+}
+
 /**
  * Tom de destaque pra ícones/indicadores: começa no 80 (o primário do tema)
  * e anda pela rampa — pro claro no escuro, pro escuro no claro — até ter
@@ -847,6 +865,18 @@ function pickAccent(ramp: BrandVariants, light: boolean, surfaces: string[]): st
     if (bgs.every((bg) => contrastRatio(ramp[k], bg) >= 3)) return ramp[k];
   }
   return ramp[steps[steps.length - 1]];
+}
+
+function shaderOptionsFocus(ramp: BrandVariants, background: string): string {
+  const accent = pickAccent(ramp, false, [background]);
+  if (accent.toLowerCase() !== "#ffffff" && contrastRatio(accent, background) >= 3) {
+    return accent;
+  }
+  let bright = background;
+  for (let shade = 5; contrastRatio(bright, background) < 3; shade += 5) {
+    bright = mixHex(background, "#ffffff", shade / 100);
+  }
+  return bright;
 }
 
 /** Tokens do Fluent que pintam indicadores com a marca, apontados pro
@@ -913,6 +943,7 @@ function make(
   o: ThemeOverrides = {},
 ): ReEmuTheme {
   const light = mode === "light";
+  const shaderBackground = brandBackgroundFor(ramp[80], "#ffffff", 4.5);
   const t: ReEmuTheme = {
     ...(light ? createLightTheme(ramp) : createDarkTheme(ramp)),
     ...(o.neutrals ?? (light ? consoleLight : consoleDark)),
@@ -938,6 +969,11 @@ function make(
     reemuSurfaceSoft: light ? "#ffffff" : "#5f6368",
     reemuBrandSolid: ramp[80],
     reemuOnBrand: readableOn(ramp[80]),
+    reemuSettingsTileBg: "",
+    reemuSelectedShaderBg: shaderBackground,
+    reemuShaderOptionsBg: light ? "#fff" : "var(--colorNeutralBackground2)",
+    reemuShaderOptionsIcon: light ? "#287d24" : "#88d782",
+    reemuShaderOptionsFocus: light ? "#ffffff" : shaderOptionsFocus(ramp, shaderBackground),
     reemuBg1: bg.bg1,
     reemuBg2: bg.bg2,
     reemuBg3: bg.bg3,
@@ -980,6 +1016,7 @@ function make(
   const page = t.colorNeutralBackground1;
   t.reemuPage = page;
   Object.assign(t, surfaceTokens(light, page, t.colorNeutralBackground2, t.colorNeutralForeground1));
+  t.reemuSettingsTileBg = brandBackgroundFor(t.reemuBrandSolid, t.colorNeutralForeground1, 3);
   t.reemuBrandAccent = pickAccent(ramp, light, [
     page,
     t.colorNeutralBackground1,
@@ -1021,6 +1058,11 @@ function makeHighContrast(): ReEmuTheme {
     reemuSurfaceSoft: bg,
     reemuBrandSolid: t.colorBrandBackground,
     reemuOnBrand: t.colorNeutralForegroundOnBrand,
+    reemuSettingsTileBg: brandBackgroundFor(t.colorBrandBackground, t.colorNeutralForeground1, 3),
+    reemuSelectedShaderBg: brandBackgroundFor(t.colorBrandBackground, "#ffffff", 7),
+    reemuShaderOptionsBg: "var(--colorNeutralBackground2)",
+    reemuShaderOptionsIcon: "#88d782",
+    reemuShaderOptionsFocus: t.colorStrokeFocus2,
     reemuBg1: bg,
     reemuBg2: bg,
     reemuBg3: bg,
