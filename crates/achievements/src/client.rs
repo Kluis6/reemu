@@ -21,6 +21,29 @@ use std::os::raw::{c_char, c_int, c_void};
 use std::path::Path;
 use thiserror::Error;
 
+/// Limiar oficial do `rcheevos` (`src/rc_client.c`: `RC_CLIENT_ACHIEVEMENT_WARNING_ID`)
+/// para avisos sintéticos injetados como pseudo-conquistas (`Warning: Unknown Emulator`,
+/// `Unsupported Game Version`, etc.). Nunca devem disparar toast de troféu nem ir ao Meu Log.
+pub const RC_CLIENT_ACHIEVEMENT_WARNING_ID: u32 = 101_000_001;
+
+/// Prefixo virtual devolvido por `dorequest.php?r=gameid` quando o hash da ROM está
+/// marcado como versão incompatível de um jogo catalogado (`1_100_000_000 + game_id`).
+pub const RA_INCOMPATIBLE_GAME_ID_BASE: u32 = 1_100_000_000;
+
+pub fn is_warning_achievement_id(id: u32) -> bool {
+    id >= RC_CLIENT_ACHIEVEMENT_WARNING_ID
+}
+
+pub fn is_incompatible_game_id(game_id: u32) -> bool {
+    game_id >= RA_INCOMPATIBLE_GAME_ID_BASE
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RaRuntimeWarnings {
+    pub unknown_emulator: bool,
+    pub unsupported_version: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Error, Serialize, Deserialize)]
 pub enum RaError {
     #[error("credenciais inválidas no RetroAchievements")]
@@ -120,6 +143,43 @@ pub struct AchievementEntry {
     pub unsupported: bool,
 }
 
+pub type AchievementInfo = AchievementEntry;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LeaderboardState {
+    Inactive,
+    Active,
+    Tracking,
+    Disabled,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LeaderboardFormat {
+    Time,
+    Score,
+    Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LeaderboardInfo {
+    pub id: u32,
+    pub title: String,
+    pub description: String,
+    pub tracker_value: Option<String>,
+    pub state: LeaderboardState,
+    pub format: LeaderboardFormat,
+    pub lower_is_better: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LeaderboardRankInfo {
+    pub best_score: String,
+    pub new_rank: u32,
+    pub num_entries: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum AchievementEvent {
     AchievementTriggered {
@@ -128,24 +188,63 @@ pub enum AchievementEvent {
         description: String,
         points: u32,
         hardcore: bool,
+        badge_name: String,
         badge_url: Option<String>,
     },
-    ProgressUpdated {
+    ProgressIndicatorShow {
         id: u32,
         title: String,
-        progress_text: String,
-        percent: f32,
+        description: String,
+        measured_progress: String,
+        measured_percent: f32,
+        badge_name: String,
         badge_url: Option<String>,
     },
-    ProgressHidden,
-    ChallengeShown {
+    ProgressIndicatorUpdate {
         id: u32,
         title: String,
+        description: String,
+        measured_progress: String,
+        measured_percent: f32,
+        badge_name: String,
         badge_url: Option<String>,
     },
-    ChallengeHidden {
+    ProgressIndicatorHide,
+    ChallengeIndicatorShow {
+        id: u32,
+        title: String,
+        description: String,
+        points: u32,
+        badge_name: String,
+        badge_url: Option<String>,
+    },
+    ChallengeIndicatorHide {
         id: u32,
     },
+    LeaderboardStarted {
+        id: u32,
+        title: String,
+        description: String,
+        tracker_text: Option<String>,
+    },
+    LeaderboardFailed {
+        id: u32,
+        title: String,
+    },
+    LeaderboardSubmitted {
+        id: u32,
+        title: String,
+        formatted_score: String,
+        rank_info: Option<LeaderboardRankInfo>,
+    },
+    LeaderboardTrackerUpdate {
+        id: u32,
+        display: String,
+    },
+    LeaderboardTrackerHide {
+        id: u32,
+    },
+    RichPresenceChanged(Option<String>),
     GameCompleted {
         hardcore: bool,
     },
@@ -157,6 +256,11 @@ pub enum AchievementEvent {
     },
     Disconnected,
     Reconnected,
+    RuntimeWarning {
+        id: u32,
+        title: String,
+        description: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -414,6 +518,55 @@ impl AchievementClient {
         unsafe { read_game_summary(self.raw) }
     }
 
+    pub fn runtime_warnings(&mut self) -> RaRuntimeWarnings {
+        let mut warnings = RaRuntimeWarnings {
+            unknown_emulator: false,
+            unsupported_version: self
+                .game_info()
+                .is_some_and(|g| is_incompatible_game_id(g.id)),
+        };
+        let list_ptr = unsafe {
+            ffi::rc_client_create_achievement_list(
+                self.raw,
+                ffi::RC_CLIENT_ACHIEVEMENT_CATEGORY_CORE_AND_UNOFFICIAL,
+                ffi::RC_CLIENT_ACHIEVEMENT_LIST_GROUPING_LOCK_STATE,
+            )
+        };
+        if list_ptr.is_null() {
+            return warnings;
+        }
+        unsafe {
+            let list = &*list_ptr;
+            if !list.buckets.is_null() {
+                let buckets = std::slice::from_raw_parts(list.buckets, list.num_buckets as usize);
+                for b in buckets {
+                    if b.achievements.is_null() {
+                        continue;
+                    }
+                    let items =
+                        std::slice::from_raw_parts(b.achievements, b.num_achievements as usize);
+                    for &ach_ptr in items {
+                        let Some(ach) = ach_ptr.as_ref() else {
+                            continue;
+                        };
+                        if !is_warning_achievement_id(ach.id) {
+                            continue;
+                        }
+                        let title_lower = cstr_or_empty(ach.title).to_ascii_lowercase();
+                        if title_lower.contains("unknown emulator") {
+                            warnings.unknown_emulator = true;
+                        }
+                        if title_lower.contains("unsupported game version") {
+                            warnings.unsupported_version = true;
+                        }
+                    }
+                }
+            }
+            ffi::rc_client_destroy_achievement_list(list_ptr);
+        }
+        warnings
+    }
+
     pub fn achievements(&mut self, include_unofficial: bool) -> Vec<AchievementEntry> {
         let category = if include_unofficial {
             ffi::RC_CLIENT_ACHIEVEMENT_CATEGORY_CORE_AND_UNOFFICIAL
@@ -442,8 +595,10 @@ impl AchievementClient {
                     let items =
                         std::slice::from_raw_parts(b.achievements, b.num_achievements as usize);
                     for &ach_ptr in items {
-                        if !ach_ptr.is_null() {
-                            out.push(read_achievement(&*ach_ptr));
+                        if let Some(ach) = ach_ptr.as_ref() {
+                            if !is_warning_achievement_id(ach.id) {
+                                out.push(read_achievement(ach));
+                            }
                         }
                     }
                 }
@@ -451,6 +606,68 @@ impl AchievementClient {
             ffi::rc_client_destroy_achievement_list(list_ptr);
         }
         out
+    }
+
+    pub fn has_leaderboards(&self) -> bool {
+        unsafe { ffi::rc_client_has_leaderboards(self.raw) != 0 }
+    }
+
+    pub fn leaderboards(&self) -> Vec<LeaderboardInfo> {
+        let list_ptr = unsafe {
+            ffi::rc_client_create_leaderboard_list(
+                self.raw,
+                ffi::RC_CLIENT_LEADERBOARD_LIST_GROUPING_NONE,
+            )
+        };
+        if list_ptr.is_null() {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        unsafe {
+            let list = &*list_ptr;
+            if !list.buckets.is_null() {
+                let buckets = std::slice::from_raw_parts(list.buckets, list.num_buckets as usize);
+                for b in buckets {
+                    if b.leaderboards.is_null() {
+                        continue;
+                    }
+                    let items =
+                        std::slice::from_raw_parts(b.leaderboards, b.num_leaderboards as usize);
+                    for &lb_ptr in items {
+                        if let Some(lb) = lb_ptr.as_ref() {
+                            out.push(read_leaderboard(lb));
+                        }
+                    }
+                }
+            }
+            ffi::rc_client_destroy_leaderboard_list(list_ptr);
+        }
+        out
+    }
+
+    pub fn has_rich_presence(&self) -> bool {
+        unsafe { ffi::rc_client_has_rich_presence(self.raw) != 0 }
+    }
+
+    pub fn rich_presence(&self) -> Option<String> {
+        if !self.is_game_loaded() {
+            return None;
+        }
+        let mut buf = [0 as c_char; 512];
+        let written = unsafe {
+            ffi::rc_client_get_rich_presence_message(self.raw, buf.as_mut_ptr(), buf.len())
+        };
+        if written == 0 {
+            return None;
+        }
+        let capped = written.min(buf.len() - 1);
+        let bytes: Vec<u8> = buf[..capped]
+            .iter()
+            .take_while(|&&c| c != 0)
+            .map(|&c| c as u8)
+            .collect();
+        let text = String::from_utf8_lossy(&bytes).trim().to_owned();
+        (!text.is_empty()).then_some(text)
     }
 
     pub fn is_processing_required(&mut self) -> bool {
@@ -689,44 +906,161 @@ unsafe extern "C" fn event_handler_trampoline(
     match ev.r#type {
         ffi::RC_CLIENT_EVENT_ACHIEVEMENT_TRIGGERED => {
             if let Some(ach) = ev.achievement.as_ref() {
-                q.events.push(AchievementEvent::AchievementTriggered {
-                    id: ach.id,
-                    title: cstr_or_empty(ach.title),
-                    description: cstr_or_empty(ach.description),
-                    points: ach.points,
-                    hardcore,
-                    badge_url: cstr_opt(ach.badge_url),
-                });
+                let title = cstr_or_empty(ach.title);
+                let description = cstr_or_empty(ach.description);
+                if is_warning_achievement_id(ach.id) {
+                    q.events.push(AchievementEvent::RuntimeWarning {
+                        id: ach.id,
+                        title,
+                        description,
+                    });
+                } else {
+                    q.events.push(AchievementEvent::AchievementTriggered {
+                        id: ach.id,
+                        title,
+                        description,
+                        points: ach.points,
+                        hardcore,
+                        badge_name: cstr_fixed(&ach.badge_name),
+                        badge_url: cstr_opt(ach.badge_url),
+                    });
+                }
             }
         }
-        ffi::RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_SHOW
-        | ffi::RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_UPDATE => {
+        ffi::RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_SHOW => {
             if let Some(ach) = ev.achievement.as_ref() {
-                q.events.push(AchievementEvent::ProgressUpdated {
-                    id: ach.id,
-                    title: cstr_or_empty(ach.title),
-                    progress_text: cstr_or_empty(ach.measured_progress.as_ptr()),
-                    percent: ach.measured_percent,
-                    badge_url: cstr_opt(ach.badge_url),
-                });
+                if !is_warning_achievement_id(ach.id) {
+                    q.events.push(AchievementEvent::ProgressIndicatorShow {
+                        id: ach.id,
+                        title: cstr_or_empty(ach.title),
+                        description: cstr_or_empty(ach.description),
+                        measured_progress: cstr_fixed(&ach.measured_progress),
+                        measured_percent: ach.measured_percent,
+                        badge_name: cstr_fixed(&ach.badge_name),
+                        badge_url: cstr_opt(ach.badge_url),
+                    });
+                }
+            }
+        }
+        ffi::RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_UPDATE => {
+            if let Some(ach) = ev.achievement.as_ref() {
+                if !is_warning_achievement_id(ach.id) {
+                    q.events.push(AchievementEvent::ProgressIndicatorUpdate {
+                        id: ach.id,
+                        title: cstr_or_empty(ach.title),
+                        description: cstr_or_empty(ach.description),
+                        measured_progress: cstr_fixed(&ach.measured_progress),
+                        measured_percent: ach.measured_percent,
+                        badge_name: cstr_fixed(&ach.badge_name),
+                        badge_url: cstr_opt(ach.badge_url),
+                    });
+                }
             }
         }
         ffi::RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_HIDE => {
-            q.events.push(AchievementEvent::ProgressHidden);
+            q.events.push(AchievementEvent::ProgressIndicatorHide);
         }
         ffi::RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_SHOW => {
             if let Some(ach) = ev.achievement.as_ref() {
-                q.events.push(AchievementEvent::ChallengeShown {
-                    id: ach.id,
-                    title: cstr_or_empty(ach.title),
-                    badge_url: cstr_opt(ach.badge_url),
-                });
+                if !is_warning_achievement_id(ach.id) {
+                    q.events.push(AchievementEvent::ChallengeIndicatorShow {
+                        id: ach.id,
+                        title: cstr_or_empty(ach.title),
+                        description: cstr_or_empty(ach.description),
+                        points: ach.points,
+                        badge_name: cstr_fixed(&ach.badge_name),
+                        badge_url: cstr_opt(ach.badge_url),
+                    });
+                }
             }
         }
         ffi::RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_HIDE => {
             if let Some(ach) = ev.achievement.as_ref() {
                 q.events
-                    .push(AchievementEvent::ChallengeHidden { id: ach.id });
+                    .push(AchievementEvent::ChallengeIndicatorHide { id: ach.id });
+            }
+        }
+        ffi::RC_CLIENT_EVENT_LEADERBOARD_STARTED => {
+            if let Some(lb) = ev.leaderboard.as_ref() {
+                q.events.push(AchievementEvent::LeaderboardStarted {
+                    id: lb.id,
+                    title: cstr_or_empty(lb.title),
+                    description: cstr_or_empty(lb.description),
+                    tracker_text: cstr_opt(lb.tracker_value),
+                });
+            }
+        }
+        ffi::RC_CLIENT_EVENT_LEADERBOARD_FAILED => {
+            if let Some(lb) = ev.leaderboard.as_ref() {
+                q.events.push(AchievementEvent::LeaderboardFailed {
+                    id: lb.id,
+                    title: cstr_or_empty(lb.title),
+                });
+            }
+        }
+        ffi::RC_CLIENT_EVENT_LEADERBOARD_SUBMITTED => {
+            if let Some(lb) = ev.leaderboard.as_ref() {
+                let rank_info = ev
+                    .leaderboard_scoreboard
+                    .as_ref()
+                    .map(|sb| LeaderboardRankInfo {
+                        best_score: cstr_fixed(&sb.best_score),
+                        new_rank: sb.new_rank,
+                        num_entries: sb.num_entries,
+                    });
+                let formatted_score = ev
+                    .leaderboard_scoreboard
+                    .as_ref()
+                    .map(|sb| cstr_fixed(&sb.submitted_score))
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| cstr_or_empty(lb.tracker_value));
+                q.events.push(AchievementEvent::LeaderboardSubmitted {
+                    id: lb.id,
+                    title: cstr_or_empty(lb.title),
+                    formatted_score,
+                    rank_info,
+                });
+            }
+        }
+        ffi::RC_CLIENT_EVENT_LEADERBOARD_SCOREBOARD => {
+            if let Some(sb) = ev.leaderboard_scoreboard.as_ref() {
+                let title = ev
+                    .leaderboard
+                    .as_ref()
+                    .map(|lb| cstr_or_empty(lb.title))
+                    .unwrap_or_default();
+                let id = ev
+                    .leaderboard
+                    .as_ref()
+                    .map(|lb| lb.id)
+                    .unwrap_or(sb.leaderboard_id);
+                q.events.push(AchievementEvent::LeaderboardSubmitted {
+                    id,
+                    title,
+                    formatted_score: cstr_fixed(&sb.submitted_score),
+                    rank_info: Some(LeaderboardRankInfo {
+                        best_score: cstr_fixed(&sb.best_score),
+                        new_rank: sb.new_rank,
+                        num_entries: sb.num_entries,
+                    }),
+                });
+            }
+        }
+        ffi::RC_CLIENT_EVENT_LEADERBOARD_TRACKER_SHOW
+        | ffi::RC_CLIENT_EVENT_LEADERBOARD_TRACKER_UPDATE => {
+            if let Some(tracker) = ev.leaderboard_tracker.as_ref() {
+                // Doc 16: `display` pode ser mutado sem trava dentro de `do_frame`;
+                // copiamos para `String` própria imediatamente dentro do callback.
+                q.events.push(AchievementEvent::LeaderboardTrackerUpdate {
+                    id: tracker.id,
+                    display: cstr_fixed(&tracker.display),
+                });
+            }
+        }
+        ffi::RC_CLIENT_EVENT_LEADERBOARD_TRACKER_HIDE => {
+            if let Some(tracker) = ev.leaderboard_tracker.as_ref() {
+                q.events
+                    .push(AchievementEvent::LeaderboardTrackerHide { id: tracker.id });
             }
         }
         ffi::RC_CLIENT_EVENT_GAME_COMPLETED => {
@@ -812,7 +1146,7 @@ unsafe fn read_achievement(ach: &ffi::rc_client_achievement_t) -> AchievementEnt
         ffi::RC_CLIENT_ACHIEVEMENT_TYPE_WIN => AchievementKind::WinCondition,
         _ => AchievementKind::Standard,
     };
-    let progress = cstr_or_empty(ach.measured_progress.as_ptr());
+    let progress = cstr_fixed(&ach.measured_progress);
     AchievementEntry {
         id: ach.id,
         title: cstr_or_empty(ach.title),
@@ -822,7 +1156,7 @@ unsafe fn read_achievement(ach: &ffi::rc_client_achievement_t) -> AchievementEnt
             || ach.state == ffi::RC_CLIENT_ACHIEVEMENT_STATE_UNLOCKED,
         unlocked_hardcore: (ach.unlocked & ffi::RC_CLIENT_ACHIEVEMENT_UNLOCKED_HARDCORE) != 0,
         unlock_time: (ach.unlock_time > 0).then_some(ach.unlock_time),
-        badge_name: cstr_or_empty(ach.badge_name.as_ptr()),
+        badge_name: cstr_fixed(&ach.badge_name),
         badge_url: cstr_opt(ach.badge_url),
         badge_locked_url: cstr_opt(ach.badge_locked_url),
         measured_progress: (!progress.is_empty()).then_some(progress),
@@ -833,6 +1167,38 @@ unsafe fn read_achievement(ach: &ffi::rc_client_achievement_t) -> AchievementEnt
         unofficial: (ach.category as c_int & ffi::RC_CLIENT_ACHIEVEMENT_CATEGORY_CORE) == 0,
         unsupported: ach.state == ffi::RC_CLIENT_ACHIEVEMENT_STATE_DISABLED,
     }
+}
+
+unsafe fn read_leaderboard(lb: &ffi::rc_client_leaderboard_t) -> LeaderboardInfo {
+    let state = match lb.state {
+        ffi::RC_CLIENT_LEADERBOARD_STATE_INACTIVE => LeaderboardState::Inactive,
+        ffi::RC_CLIENT_LEADERBOARD_STATE_TRACKING => LeaderboardState::Tracking,
+        ffi::RC_CLIENT_LEADERBOARD_STATE_DISABLED => LeaderboardState::Disabled,
+        _ => LeaderboardState::Active,
+    };
+    let format = match lb.format {
+        ffi::RC_CLIENT_LEADERBOARD_FORMAT_TIME => LeaderboardFormat::Time,
+        ffi::RC_CLIENT_LEADERBOARD_FORMAT_SCORE => LeaderboardFormat::Score,
+        _ => LeaderboardFormat::Value,
+    };
+    LeaderboardInfo {
+        id: lb.id,
+        title: cstr_or_empty(lb.title),
+        description: cstr_or_empty(lb.description),
+        tracker_value: cstr_opt(lb.tracker_value),
+        state,
+        format,
+        lower_is_better: lb.lower_is_better != 0,
+    }
+}
+
+fn cstr_fixed(buf: &[c_char]) -> String {
+    let bytes: Vec<u8> = buf
+        .iter()
+        .take_while(|&&c| c != 0)
+        .map(|&c| c as u8)
+        .collect();
+    String::from_utf8_lossy(&bytes).into_owned()
 }
 
 fn cstr_or_empty(ptr: *const c_char) -> String {

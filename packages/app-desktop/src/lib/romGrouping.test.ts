@@ -110,4 +110,35 @@ describe('romGrouping', () => {
     expect(romVariantLabel(siblings[0], siblings, i18n.t)).toContain('Chip 1')
     expect(romVariantLabel(siblings[1], siblings, i18n.t)).toContain('Chip 2')
   })
+
+  it('prefers_clean_untagged_goodtools_ntsc_dump_ahead_of_pal_and_pirate_dumps', () => {
+    const palPirate = makeRom({
+      id: 'fg-pal-p1',
+      systemId: 'atari2600',
+      title: 'Flash Gordon',
+      filePath: '/roms/atari2600/Flash Gordon (1983) (20th Century Fox) (PAL) [p1][!].a26',
+      groupKey: 'game:uuid-fg',
+      region: 'EU',
+    })
+    const palClean = makeRom({
+      id: 'fg-pal',
+      systemId: 'atari2600',
+      title: 'Flash Gordon',
+      filePath: '/roms/atari2600/Flash Gordon (1983) (20th Century Fox) (PAL) [!].a26',
+      groupKey: 'game:uuid-fg',
+      region: 'EU',
+    })
+    const ntscClean = makeRom({
+      id: 'fg-ntsc',
+      systemId: 'atari2600',
+      title: 'Flash Gordon',
+      filePath: '/roms/atari2600/Flash Gordon (1983) (20th Century Fox) [!].a26',
+      groupKey: 'game:uuid-fg',
+    })
+
+    const grouped = groupRoms([palPirate, palClean, ntscClean], 'pt-BR')
+    expect(grouped).toHaveLength(1)
+    expect(grouped[0].id).toBe('fg-ntsc')
+    expect(grouped[0].variants.map((v) => v.id)).toEqual(['fg-ntsc', 'fg-pal', 'fg-pal-p1'])
+  })
 })

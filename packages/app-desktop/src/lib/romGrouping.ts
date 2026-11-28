@@ -15,6 +15,9 @@ const REV_RE = /^(?:rev\.?\s*(?:\d+|[a-c])|v\d+(?:\.\d+)+[a-z]?|ver\.?\s*\d+(?:\
 const EDITION_RE =
   /^(?:beta(?:\s*\d+)?|proto(?:\s*\d+)?|prototype|demo|sample|promo|kiosk|arcade|virtual console|unl|pirate|t[+-][a-z]{2,5}.*)$/i
 const NON_FINAL_RE = /\b(?:beta|proto|prototype|demo|sample|promo|kiosk)\b/i
+const BAD_OR_MOD_DUMP_RE = /\[(?:b|p|h|t|o|f|u)\d*(?:[^\]]*)\]/i
+const ALT_DUMP_RE = /\[a\d*(?:[^\]]*)\]/i
+const VERIFIED_GOOD_RE = /\[!\]/
 
 function normalizeSingleRegion(token: string, allowSingleLetter: boolean): CanonicalRegion | null {
   const lower = token.trim().toLowerCase()
@@ -264,7 +267,17 @@ function preferredRegionOrder(uiLanguage?: string): readonly CanonicalRegion[] {
 
 function regionRank(rom: RomEntry, order: readonly CanonicalRegion[]): number {
   const code = detectRomRegionFallback(rom)
-  if (!code) return order.length + 1
+  if (!code) {
+    // Em sets GoodTools/TOSEC (ex.: Atari 2600, NES, Genesis), a versão NTSC/USA
+    // padrão não traz tag `(USA)`, enquanto a europeia traz `(PAL)`. Quando o
+    // idioma prefere `NA` antes de `EU`, colocamos dumps limpos sem tag logo antes de `EU`.
+    const naIdx = order.indexOf('NA')
+    const euIdx = order.indexOf('EU')
+    if (naIdx >= 0 && euIdx >= 0 && naIdx < euIdx) {
+      return euIdx - 0.5
+    }
+    return order.length + 1
+  }
   const idx = order.indexOf(code)
   return idx >= 0 ? idx : order.length
 }
@@ -272,6 +285,17 @@ function regionRank(rom: RomEntry, order: readonly CanonicalRegion[]): number {
 function isNonFinalBuild(rom: RomEntry): boolean {
   const q = extractQualifierFallback(rom)
   return q ? NON_FINAL_RE.test(q) : NON_FINAL_RE.test(rom.filePath)
+}
+
+function dumpQualityPenalty(rom: RomEntry): number {
+  const base = fileStemFromPath(rom.filePath)
+  if (BAD_OR_MOD_DUMP_RE.test(base)) return 2
+  if (ALT_DUMP_RE.test(base)) return 1
+  return 0
+}
+
+function isVerifiedGoodDump(rom: RomEntry): boolean {
+  return VERIFIED_GOOD_RE.test(fileStemFromPath(rom.filePath))
 }
 
 function sortVariants(variants: readonly RomEntry[], uiLanguage?: string): RomEntry[] {
@@ -283,8 +307,16 @@ function sortVariants(variants: readonly RomEntry[], uiLanguage?: string): RomEn
     const nonFinalA = isNonFinalBuild(a)
     const nonFinalB = isNonFinalBuild(b)
     if (nonFinalA !== nonFinalB) return nonFinalA ? 1 : -1
+    const badModA = dumpQualityPenalty(a) >= 2 ? 1 : 0
+    const badModB = dumpQualityPenalty(b) >= 2 ? 1 : 0
+    if (badModA !== badModB) return badModA - badModB
     const regDiff = regionRank(a, order) - regionRank(b, order)
     if (regDiff !== 0) return regDiff
+    const altDiff = dumpQualityPenalty(a) - dumpQualityPenalty(b)
+    if (altDiff !== 0) return altDiff
+    const goodA = isVerifiedGoodDump(a) ? 0 : 1
+    const goodB = isVerifiedGoodDump(b) ? 0 : 1
+    if (goodA !== goodB) return goodA - goodB
     const hasArtA = a.boxart ? 0 : 1
     const hasArtB = b.boxart ? 0 : 1
     if (hasArtA !== hasArtB) return hasArtA - hasArtB
