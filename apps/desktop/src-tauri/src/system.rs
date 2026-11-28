@@ -251,4 +251,5 @@ fn restore<R: Runtime>(app: &AppHandle<R>) {
         let _ = win.set_focus();
     }
     let _ = app.remove_tray_by_id(TRAY_ID);
+    crate::presence::on_main_window_restored(app);
 }

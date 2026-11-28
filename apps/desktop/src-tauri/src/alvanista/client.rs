@@ -322,11 +322,23 @@ impl Client {
     /// `rom_resolve_disabled` e 404 `game_not_found`, devolvidos com status e
     /// corpo para quem chamou tratar como regra de negócio, assim como os
     /// demais 4xx).
+    #[cfg(test)]
     pub(crate) async fn authed_json(
         &self,
         method: reqwest::Method,
         path: &str,
         body: Option<&serde_json::Value>,
+    ) -> Result<(u16, serde_json::Value)> {
+        self.authed_json_with_timeout(method, path, body, None)
+            .await
+    }
+
+    pub(crate) async fn authed_json_with_timeout(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<&serde_json::Value>,
+        timeout: Option<Duration>,
     ) -> Result<(u16, serde_json::Value)> {
         match self.store.has_session().await {
             Ok(true) => {}
@@ -342,12 +354,12 @@ impl Client {
             Err(e) => return Err(ClientError::Transient(e.to_string())),
         };
         let mut result = self
-            .send_authed_json(&tokens.access_token, method.clone(), path, body)
+            .send_authed_json(&tokens.access_token, method.clone(), path, body, timeout)
             .await;
         if matches!(result, Err(MeError::Unauthorized)) {
             tokens = self.refresh(&tokens).await?;
             result = self
-                .send_authed_json(&tokens.access_token, method, path, body)
+                .send_authed_json(&tokens.access_token, method, path, body, timeout)
                 .await;
         }
         match result {
@@ -443,11 +455,15 @@ impl Client {
         method: reqwest::Method,
         path: &str,
         body: Option<&serde_json::Value>,
+        timeout: Option<Duration>,
     ) -> std::result::Result<(u16, serde_json::Value), MeError> {
         let mut req = self
             .http
             .request(method, format!("{}{path}", self.api))
             .bearer_auth(access_token);
+        if let Some(t) = timeout {
+            req = req.timeout(t);
+        }
         if let Some(b) = body {
             req = req.json(b);
         }

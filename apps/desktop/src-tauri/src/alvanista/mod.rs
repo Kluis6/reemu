@@ -107,6 +107,8 @@ pub struct Alvanista {
     generation: Arc<AtomicU64>,
     /// O aparelho do cloud save desta máquina: sai junto com a conta.
     sync: OnceLock<Arc<SyncService>>,
+    /// Coordenador de presenca: avisa `"offline"` antes de revogar a sessao.
+    presence: OnceLock<crate::presence::ActivityCoordinator>,
 }
 
 impl Alvanista {
@@ -115,6 +117,7 @@ impl Alvanista {
             client,
             generation: Arc::new(AtomicU64::new(0)),
             sync: OnceLock::new(),
+            presence: OnceLock::new(),
         }
     }
 
@@ -122,6 +125,11 @@ impl Alvanista {
     /// acabou no site o esquece. Só a primeira chamada vale.
     pub fn attach_sync(&self, sync: Arc<SyncService>) {
         let _ = self.sync.set(sync);
+    }
+
+    /// Liga o coordenador de presenca para emitir `"offline"` ao desconectar.
+    pub fn attach_presence(&self, presence: crate::presence::ActivityCoordinator) {
+        let _ = self.presence.set(presence);
     }
 
     /// O aparelho do cloud save sai com a conta. `revoke`: avisa o servidor
@@ -239,10 +247,24 @@ impl Alvanista {
         path: &str,
         body: Option<&serde_json::Value>,
     ) -> Result<(u16, serde_json::Value), ClientError> {
+        self.partner_json_with_timeout(method, path, body, None)
+            .await
+    }
+
+    pub(crate) async fn partner_json_with_timeout(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<&serde_json::Value>,
+        timeout: Option<Duration>,
+    ) -> Result<(u16, serde_json::Value), ClientError> {
         if !self.has_session().await {
             return Err(ClientError::AuthEnded);
         }
-        let res = self.client.authed_json(method, path, body).await;
+        let res = self
+            .client
+            .authed_json_with_timeout(method, path, body, timeout)
+            .await;
         if matches!(res, Err(ClientError::AuthEnded)) {
             let _ = self.store().mirror_clear().await;
             self.forget_save_device(true).await;
@@ -644,6 +666,9 @@ impl Alvanista {
     /// Sem sessão marcada não há o que revogar nem apagar: só sai o espelho.
     pub async fn disconnect(&self) -> Result<(), String> {
         self.cancel();
+        if let Some(presence) = self.presence.get() {
+            presence.on_disconnect(self).await;
+        }
         // O aparelho do cloud save vai primeiro, com o token dele: o par do
         // parceiro, que revoga abaixo, não é o que o autoriza.
         self.forget_save_device(true).await;
@@ -772,6 +797,7 @@ pub fn refresh_on_start(app: &AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         refresh_profile_now(&app).await;
+        crate::presence::spawn_on_start(app.clone());
         crate::catalog::spawn_on_start(app.clone());
         // O cloud save começa depois: a primeira passada usa o par que a
         // renovação deixou.
@@ -842,6 +868,7 @@ pub async fn alvanista_connect(
         alva.connect(lang, open_in_browser).await
     };
     if res.is_ok() {
+        crate::presence::notify_connected(&app);
         crate::catalog::trigger_in_background(&app, crate::catalog::PassScope::All);
     }
     res

@@ -16,14 +16,9 @@ use crate::commands::GameMetadataDto;
 use domain::metadata::ResolutionState;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
 pub const CATALOG_EVENT: &str = "catalog";
-
-/// Acompanhamento periódico enquanto houver arquivos `pending` ou com mídia
-/// pendente, e nenhum jogo estiver rodando (D140 / Review Focus 3).
-const IDLE_EVERY: Duration = Duration::from_secs(30 * 60);
 
 pub fn install(app: &AppHandle, db: db::Db, covers_dir: PathBuf) {
     let probe = app.clone();
@@ -67,8 +62,9 @@ fn log_pass(where_: &str, res: Result<PassReport, CatalogError>) {
     }
 }
 
-/// Primeira passada ao abrir o app (depois de `refresh_on_start`) e laço de 30
-/// minutos enquanto houver pendências e nenhum jogo estiver rodando.
+/// Primeira passada ao abrir o app (depois de `refresh_on_start`) e laco
+/// adaptativo enquanto houver pendencias e nenhum jogo estiver rodando:
+/// `15 min` em primeiro plano e `30m -> 60m -> 120m -> 240m` em segundo plano.
 pub fn spawn_on_start(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         if let Some((engine, alva)) = parts(&app) {
@@ -79,8 +75,22 @@ pub fn spawn_on_start(app: AppHandle) {
                 );
             }
         }
+        let mut bg_step = 0u32;
+        let mut last_pass_at = tokio::time::Instant::now();
         loop {
-            tokio::time::sleep(IDLE_EVERY).await;
+            if let Some(coord) = app.try_state::<crate::presence::ActivityCoordinator>() {
+                coord
+                    .wait_next_cycle(
+                        crate::presence::CATALOG_FG_EVERY,
+                        &crate::presence::CATALOG_BG_STEPS,
+                        &mut bg_step,
+                        last_pass_at,
+                    )
+                    .await;
+            } else {
+                tokio::time::sleep(crate::presence::CATALOG_FG_EVERY).await;
+            }
+            last_pass_at = tokio::time::Instant::now();
             let Some((engine, alva)) = parts(&app) else {
                 continue;
             };

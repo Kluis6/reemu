@@ -61,8 +61,6 @@ pub(in crate::sync) use states::WIPED as STATE_WIPED;
 
 /// Quanto um jogo espera pela nuvem antes de abrir (D117).
 const PRELAUNCH_BUDGET: Duration = Duration::from_secs(5);
-/// A passada sem jogo aberto.
-const IDLE_EVERY: Duration = Duration::from_secs(600);
 /// Uma rajada de saves de state sobe 3 s depois do último.
 const STATE_DEBOUNCE: Duration = Duration::from_secs(3);
 

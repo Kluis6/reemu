@@ -6039,6 +6039,7 @@ async fn sync_pass_unlocks_retroachievements_locally_and_pushes_updates() {
     assert!(!sync_meta.thegamesdb.dirty);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn row_with_identity(
     save_id: &str,
     filename: &str,

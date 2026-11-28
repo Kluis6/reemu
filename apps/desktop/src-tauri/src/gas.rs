@@ -10,8 +10,9 @@
 use crate::alvanista::Alvanista;
 use serde::Serialize;
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tauri::{AppHandle, Manager};
+use tokio::time::Instant;
 use uuid::Uuid;
 
 pub const GAS_SIGNALS_PATH: &str = "/api/partner/v1/gas/signals";
@@ -21,8 +22,6 @@ pub const SIGNAL_SESSION_HEARTBEAT: &str = "emulator.session_heartbeat";
 pub const SIGNAL_SESSION_COMPLETED: &str = "emulator.session_completed";
 pub const SIGNAL_ACHIEVEMENT_UNLOCKED: &str = "emulator.achievement_unlocked";
 
-const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15 * 60);
-const HEARTBEAT_DELTA_MIN: i64 = 15;
 const MIN_COMPLETED_PLAYTIME: Duration = Duration::from_secs(60);
 
 const MAX_PLAYTIME_MIN: i32 = 720;
@@ -253,8 +252,76 @@ fn spawn_signal(app: &AppHandle, signal: GasSignalPayload) {
     });
 }
 
+pub(crate) async fn run_session_heartbeat_loop<S, P, E, Fut>(
+    coord: Option<crate::presence::ActivityCoordinator>,
+    started_at: Instant,
+    mut session_snapshot: S,
+    mut is_paused: P,
+    mut emit: E,
+) where
+    S: FnMut() -> Option<(String, Option<String>, Option<String>, u32, bool)>,
+    P: FnMut() -> bool,
+    E: FnMut(GasSignalPayload) -> Fut,
+    Fut: std::future::Future<Output = ()>,
+{
+    let mut tick = 0u32;
+    let mut bg_step = 0u32;
+    let mut last_cycle_at = started_at;
+    let mut last_heartbeat_at = started_at;
+
+    loop {
+        if let Some(c) = coord.as_ref() {
+            c.wait_next_cycle(
+                crate::presence::GAS_FG_EVERY,
+                &crate::presence::GAS_BG_STEPS,
+                &mut bg_step,
+                last_cycle_at,
+            )
+            .await;
+            if c.is_shutting_down() {
+                break;
+            }
+        } else {
+            tokio::time::sleep(crate::presence::GAS_FG_EVERY).await;
+        }
+
+        let now = Instant::now();
+        last_cycle_at = now;
+
+        let Some((session_uuid, game_id, system_id, ra_game_id, hardcore)) = session_snapshot()
+        else {
+            break;
+        };
+
+        if is_paused() {
+            continue;
+        }
+
+        tick = tick.saturating_add(1);
+        let raw_delta = (now.saturating_duration_since(last_heartbeat_at).as_secs() / 60) as i64;
+        let delta_min = i64::from(clamp_heartbeat_value(raw_delta));
+        last_heartbeat_at = now;
+        let elapsed_min = (now.saturating_duration_since(started_at).as_secs() / 60) as i64;
+
+        let Some(sig) = build_session_heartbeat(
+            &session_uuid,
+            tick,
+            delta_min,
+            elapsed_min,
+            game_id.as_deref(),
+            system_id.as_deref(),
+            ra_game_id,
+            hardcore,
+        ) else {
+            break;
+        };
+        emit(sig).await;
+    }
+}
+
 /// Inicia a sessão GAS da partida atual e agenda o sinal inicial mais o
-/// batimento de 15 em 15 minutos, sem bloquear o carregamento do jogo.
+/// batimento adaptativo (`15 min` ativo em primeiro plano; `30m -> 60m` em
+/// segundo plano), sem bloquear o carregamento do jogo.
 pub fn on_game_launched(
     app: &AppHandle,
     rom_id: Option<&str>,
@@ -266,6 +333,7 @@ pub fn on_game_launched(
         return;
     };
     let session_uuid = Uuid::new_v4().to_string();
+    let started_at = Instant::now();
     let start_signal = {
         let mut g = gas.inner.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(prev_hb) = g.heartbeat_task.take() {
@@ -290,7 +358,7 @@ pub fn on_game_launched(
             system_id,
             ra_game_id,
             hardcore: eff_hc,
-            started_at: Instant::now(),
+            started_at,
         });
         sig
     };
@@ -301,38 +369,45 @@ pub fn on_game_launched(
 
     let app_hb = app.clone();
     let hb_uuid = session_uuid.clone();
+    let coord = app
+        .try_state::<crate::presence::ActivityCoordinator>()
+        .map(|c| c.inner().clone());
     let handle = tauri::async_runtime::spawn(async move {
-        let mut tick = 0u32;
-        loop {
-            tokio::time::sleep(HEARTBEAT_INTERVAL).await;
-            tick = tick.saturating_add(1);
-            let sig = {
-                let Some(gas) = app_hb.try_state::<GasState>() else {
-                    break;
-                };
+        let app_snap = app_hb.clone();
+        let app_pause = app_hb.clone();
+        let app_emit = app_hb.clone();
+        run_session_heartbeat_loop(
+            coord,
+            started_at,
+            move || {
+                let gas = app_snap.try_state::<GasState>()?;
                 let g = gas.inner.lock().unwrap_or_else(|p| p.into_inner());
-                let Some(sess) = g.active.as_ref().filter(|s| s.session_uuid == hb_uuid) else {
-                    break;
-                };
-                let elapsed_min = (sess.started_at.elapsed().as_secs() / 60) as i64;
-                build_session_heartbeat(
-                    &sess.session_uuid,
-                    tick,
-                    HEARTBEAT_DELTA_MIN,
-                    elapsed_min,
-                    sess.game_id.as_deref(),
-                    sess.system_id.as_deref(),
+                let sess = g.active.as_ref().filter(|s| s.session_uuid == hb_uuid)?;
+                Some((
+                    sess.session_uuid.clone(),
+                    sess.game_id.clone(),
+                    sess.system_id.clone(),
                     sess.ra_game_id,
                     sess.hardcore,
-                )
-            };
-            let Some(sig) = sig else {
-                break;
-            };
-            if let Some(alva) = app_hb.try_state::<Alvanista>() {
-                let _ = post_gas_signals(&alva, &[sig]).await;
-            }
-        }
+                ))
+            },
+            move || {
+                app_pause
+                    .try_state::<crate::commands::AppState>()
+                    .is_some_and(|st| {
+                        matches!(st.session.state(), emu_session::SessionState::Paused)
+                    })
+            },
+            move |sig| {
+                let app_post = app_emit.clone();
+                async move {
+                    if let Some(alva) = app_post.try_state::<Alvanista>() {
+                        let _ = post_gas_signals(&alva, &[sig]).await;
+                    }
+                }
+            },
+        )
+        .await;
     });
 
     let mut g = gas.inner.lock().unwrap_or_else(|p| p.into_inner());
@@ -582,7 +657,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        assert!(post_gas_signals(&alva, &[sig.clone()]).await);
+        assert!(post_gas_signals(&alva, std::slice::from_ref(&sig)).await);
 
         // 404 ou 500 falha silenciosamente sem derrubar a sessao.
         server.reset().await;
@@ -591,7 +666,122 @@ mod tests {
             .respond_with(ResponseTemplate::new(503))
             .mount(&server)
             .await;
-        assert!(!post_gas_signals(&alva, &[sig]).await);
+        assert!(!post_gas_signals(&alva, std::slice::from_ref(&sig)).await);
         assert!(alva.has_session().await);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn heartbeat_loop_adapts_between_foreground_background_and_pause() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let coord = crate::presence::ActivityCoordinator::new();
+        let paused = Arc::new(AtomicBool::new(false));
+        let alive = Arc::new(AtomicBool::new(true));
+        let emitted: Arc<Mutex<Vec<GasSignalPayload>>> = Arc::new(Mutex::new(Vec::new()));
+
+        let started_at = Instant::now();
+        let c_loop = coord.clone();
+        let paused_loop = paused.clone();
+        let alive_loop = alive.clone();
+        let emitted_loop = emitted.clone();
+
+        let handle = tokio::spawn(async move {
+            run_session_heartbeat_loop(
+                Some(c_loop),
+                started_at,
+                move || {
+                    alive_loop.load(Ordering::SeqCst).then(|| {
+                        (
+                            SESS_UUID.to_owned(),
+                            Some(VALID_GAME.to_owned()),
+                            Some("snes".to_owned()),
+                            319,
+                            false,
+                        )
+                    })
+                },
+                move || paused_loop.load(Ordering::SeqCst),
+                move |sig| {
+                    let out = emitted_loop.clone();
+                    async move {
+                        out.lock().unwrap().push(sig);
+                    }
+                },
+            )
+            .await;
+        });
+
+        for _ in 0..5 {
+            tokio::task::yield_now().await;
+        }
+
+        // 1) Primeiro plano ativo: 15 min -> value=15, playtime_min=15.
+        tokio::time::advance(Duration::from_secs(15 * 60)).await;
+        for _ in 0..5 {
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(emitted.lock().unwrap().len(), 1);
+        assert_eq!(emitted.lock().unwrap()[0].value, 15);
+        assert_eq!(emitted.lock().unwrap()[0].playtime_min, 15);
+
+        // 2) Janela perde o foco: recuo gradual 30m -> 60m.
+        coord.set_ui_active(true, false);
+        for _ in 0..5 {
+            tokio::task::yield_now().await;
+        }
+        tokio::time::advance(Duration::from_secs(29 * 60)).await;
+        for _ in 0..5 {
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(emitted.lock().unwrap().len(), 1);
+
+        tokio::time::advance(Duration::from_secs(60)).await;
+        for _ in 0..5 {
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(emitted.lock().unwrap().len(), 2);
+        assert_eq!(emitted.lock().unwrap()[1].value, 30);
+        assert_eq!(emitted.lock().unwrap()[1].playtime_min, 45);
+
+        // Proximo passo em segundo plano: 60 min.
+        tokio::time::advance(Duration::from_secs(59 * 60)).await;
+        for _ in 0..5 {
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(emitted.lock().unwrap().len(), 2);
+
+        tokio::time::advance(Duration::from_secs(60)).await;
+        for _ in 0..5 {
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(emitted.lock().unwrap().len(), 3);
+        assert_eq!(emitted.lock().unwrap()[2].value, 60);
+        assert_eq!(emitted.lock().unwrap()[2].playtime_min, 105);
+
+        // 3) Em pausa, nao emite batimento mesmo quando o ciclo vence.
+        paused.store(true, Ordering::SeqCst);
+        coord.set_ui_active(true, true);
+        for _ in 0..5 {
+            tokio::task::yield_now().await;
+        }
+        tokio::time::advance(Duration::from_secs(15 * 60)).await;
+        for _ in 0..5 {
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(emitted.lock().unwrap().len(), 3);
+
+        // Despausa e roda mais 15m: delta_min soma os 30m desde o ultimo batimento (clamp 1..=60).
+        paused.store(false, Ordering::SeqCst);
+        tokio::time::advance(Duration::from_secs(15 * 60)).await;
+        for _ in 0..5 {
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(emitted.lock().unwrap().len(), 4);
+        assert_eq!(emitted.lock().unwrap()[3].value, 30);
+        assert_eq!(emitted.lock().unwrap()[3].playtime_min, 135);
+
+        alive.store(false, Ordering::SeqCst);
+        coord.mark_shutting_down();
+        let _ = handle.await;
     }
 }

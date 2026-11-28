@@ -1,11 +1,41 @@
 import { useQuery } from '@tanstack/react-query'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { alvanistaAchievements, alvanistaFriends } from '../lib/tauri'
 
 export const ALVANISTA_FRIENDS_KEY = ['alvanista-friends'] as const
 export const ALVANISTA_ACHIEVEMENTS_KEY = ['alvanista-achievements'] as const
 
 const SHOW_ONLINE_STORAGE_KEY = 'reemu.network.showOnline'
+const FRIENDS_ONLINE_POLL_MS = 60_000
+
+function isDocumentForeground(): boolean {
+  if (typeof document === 'undefined') return true
+  const visible = document.visibilityState === 'visible'
+  const focused = typeof document.hasFocus === 'function' ? document.hasFocus() : true
+  return visible && focused
+}
+
+function useDocumentForeground(active: boolean): boolean {
+  const [foreground, setForeground] = useState<boolean>(() => isDocumentForeground())
+
+  useEffect(() => {
+    if (!active || typeof window === 'undefined' || typeof document === 'undefined') {
+      return
+    }
+    const update = () => setForeground(isDocumentForeground())
+    update()
+    document.addEventListener('visibilitychange', update)
+    window.addEventListener('focus', update)
+    window.addEventListener('blur', update)
+    return () => {
+      document.removeEventListener('visibilitychange', update)
+      window.removeEventListener('focus', update)
+      window.removeEventListener('blur', update)
+    }
+  }, [active])
+
+  return foreground
+}
 
 export function socialErrorCode(err: unknown): string {
   if (typeof err === 'string') return err
@@ -13,13 +43,24 @@ export function socialErrorCode(err: unknown): string {
   return 'failed'
 }
 
-export function useAlvanistaFriends(enabled: boolean, username?: string | null, connectedAt?: number | null) {
+export function useAlvanistaFriends(
+  enabled: boolean,
+  username?: string | null,
+  connectedAt?: number | null,
+  pollOnline = false,
+) {
+  const foreground = useDocumentForeground(enabled && pollOnline)
   return useQuery({
     queryKey: [...ALVANISTA_FRIENDS_KEY, username ?? null, connectedAt ?? null],
     queryFn: alvanistaFriends,
     enabled,
     retry: false,
     staleTime: 60_000,
+    refetchInterval:
+      enabled && pollOnline && foreground
+        ? () => (isDocumentForeground() ? FRIENDS_ONLINE_POLL_MS : false)
+        : false,
+    refetchIntervalInBackground: false,
   })
 }
 

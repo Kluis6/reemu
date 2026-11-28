@@ -371,6 +371,7 @@ pub(crate) fn toggle_and_emit<R: tauri::Runtime>(app: &AppHandle<R>) -> &'static
         };
     }
     let s = focus_str(now);
+    crate::presence::notify_session_changed(app);
     let _ = app.emit("focus-changed", FocusChanged { focus: s });
     s
 }
