@@ -65,14 +65,17 @@ describe('rankCores', () => {
     expect(rankCores(cores, 'atari5200', 'bin')[0].coreId).toBe('a5200_libretro')
   })
 
-  it('oferece o CPS-1 para ZIP de Arcade sem mudar a escolha automática existente', () => {
+  it('oferece as variantes CPS para ZIP de Arcade sem mudar a escolha automática existente', () => {
     const cps1 = core('fbalpha2012_cps1_libretro', 'FB Alpha 2012 CPS-1', ['zip'], ['arcade'])
+    const cps2 = core('fbalpha2012_cps2_libretro', 'FB Alpha 2012 CPS-2', ['zip'], ['arcade'])
+    const cps3 = core('fbalpha2012_cps3_libretro', 'FB Alpha 2012 CPS-3', ['iso', 'zip'], ['arcade'])
     const fbneo = core('fbneo_libretro', 'FinalBurn Neo', ['zip'], ['arcade'])
     const mame = core('mame_libretro', 'MAME', ['zip'], ['arcade'])
 
-    expect(rankCores([cps1, mame, fbneo], 'arcade', 'zip')).toEqual([fbneo, mame, cps1])
-    expect(rankCores([cps1, mame], 'arcade', 'zip')).toEqual([mame, cps1])
-    expect(rankCores([cps1], 'arcade', 'zip')).toEqual([cps1])
+    expect(rankCores([cps3, cps2, cps1, mame, fbneo], 'arcade', 'zip')).toEqual([fbneo, mame, cps1, cps2, cps3])
+    expect(rankCores([cps2, mame], 'arcade', 'zip')).toEqual([mame, cps2])
+    expect(rankCores([cps2], 'arcade', 'zip')).toEqual([cps2])
+    expect(rankCores([cps3], 'arcade', 'zip')).toEqual([cps3])
   })
 
   it('escolhe Uzem para Uzebox e exige um core compatível', () => {

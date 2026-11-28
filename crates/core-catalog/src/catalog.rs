@@ -283,6 +283,18 @@ pub const CATALOG: &[CatalogEntry] = &[
         "Non-commercial",
     ),
     sw(
+        "fbalpha2012_cps2_libretro",
+        "FB Alpha 2012 CPS-2",
+        "Arcade / Capcom CPS-2",
+        "Non-commercial",
+    ),
+    sw(
+        "fbalpha2012_cps3_libretro",
+        "FB Alpha 2012 CPS-3",
+        "Arcade / Capcom CPS-3",
+        "Non-commercial",
+    ),
+    sw(
         "mame2003_plus_libretro",
         "MAME 2003-Plus",
         "Arcade (0.78+)",
@@ -1051,6 +1063,8 @@ mod tests {
         );
         assert_eq!(ids("Neo Geo / CPS / arcade"), vec!["arcade"]);
         assert_eq!(system_ids("fbalpha2012_cps1_libretro"), vec!["arcade"]);
+        assert_eq!(system_ids("fbalpha2012_cps2_libretro"), vec!["arcade"]);
+        assert_eq!(system_ids("fbalpha2012_cps3_libretro"), vec!["arcade"]);
         // todo core do catálogo cai em pelo menos um sistema da varredura,
         // exceto os de sistemas que a varredura não tem (Doom, TIC-80,
         // Commodore 128, Enterprise)
@@ -1387,6 +1401,41 @@ mod tests {
             }
         }
         "120 quadros de emulação por framefile e ZIP, vídeo e áudio".into()
+    }
+
+    fn cps_smoke(
+        host: &Path,
+        core: &Path,
+        cores_dir: &Path,
+        entry: &CatalogEntry,
+        rom_var: &str,
+    ) -> String {
+        use std::ffi::OsStr;
+
+        let Some(rom) = std::env::var_os(rom_var) else {
+            return format!("boot de Arcade pendente ({rom_var})");
+        };
+        let system = cores_dir.join(format!("{}-system", entry.id));
+        std::fs::create_dir_all(&system).expect("pasta de sistema de teste do CPS");
+        let args = [
+            OsStr::new("--run"),
+            cores_dir.as_os_str(),
+            OsStr::new(entry.id),
+            rom.as_os_str(),
+            OsStr::new("1800"),
+            system.as_os_str(),
+        ];
+        let (status, output, detail) = run_host(host, core, &args, &system.join("run.txt"));
+        let played = output.lines().any(|line| {
+            let fields: Vec<_> = line.split('\t').collect();
+            matches!(fields.as_slice(), ["REEMU_RUN_OK", "1800", video, audio, "ok"]
+                if video.parse::<u32>().is_ok_and(|n| n > 0)
+                    && audio.parse::<usize>().is_ok_and(|n| n > 0))
+        });
+        if !status.is_some_and(|s| s.success()) || !played {
+            return format!("FALHA: {}: {output}{detail}", entry.id);
+        }
+        "1800 quadros em ZIP, vídeo, amostras de áudio e save state ok".into()
     }
 
     fn amiarcadia_smoke(host: &Path, core: &Path, cores_dir: &Path) -> String {
@@ -2095,6 +2144,15 @@ mod tests {
                 amiarcadia_smoke(&host, &path, &cores_dir)
             } else {
                 game
+            };
+            let game = match (c.id, row.0) {
+                ("fbalpha2012_cps2_libretro", "ok") => {
+                    cps_smoke(&host, &path, &cores_dir, c, "REEMU_CPS2_ROM")
+                }
+                ("fbalpha2012_cps3_libretro", "ok") => {
+                    cps_smoke(&host, &path, &cores_dir, c, "REEMU_CPS3_ROM")
+                }
+                _ => game,
             };
             let game = match known_broken(c.id) {
                 Some(why) if game.starts_with("FALHA") => format!("conhecido: {why}"),

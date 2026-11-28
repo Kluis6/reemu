@@ -192,6 +192,14 @@ o card atual fica.
         para conferir instalação e probe. Abrir um ZIP do conjunto FB Alpha
         0.2.97.28 pela biblioteca Arcade com seleção manual do core. Conferir
         vídeo, áudio, RetroPad e restauração de save state.
+        No FB Alpha 2012 CPS-2, executar `REEMU_SMOKE_ONLY=fbalpha2012_cps2_libretro`
+        com `REEMU_CPS2_ROM` apontando para um ZIP compatível com FB Alpha
+        0.2.97.28. Conferir instalação, seleção manual em Arcade, RetroPad,
+        vídeo, áudio e restauração de save state.
+        No FB Alpha 2012 CPS-3, executar `REEMU_SMOKE_ONLY=fbalpha2012_cps3_libretro`
+        com `REEMU_CPS3_ROM` apontando para um ZIP compatível com FB Alpha
+        0.2.97.29. Conferir instalação, seleção manual em Arcade, RetroPad,
+        vídeo, áudio e restauração de save state.
       - **Gerenciamento de BIOS.** Testar na interface a escolha de pasta,
         a busca em subpastas, o reconhecimento por MD5, a importação no
         destino por core, a revisão manual e a repetição sem duplicatas.

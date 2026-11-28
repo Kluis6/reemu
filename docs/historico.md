@@ -568,6 +568,18 @@ Infra:
 
 ## Notas de progresso
 
+- **2026-11-28 — FB Alpha 2012 CPS-3 no Windows x64**. Integração como
+  alternativa para Arcade. Seis ZIPs locais passaram o teste nativo de
+  1.800 quadros com vídeo, áudio e restauração de save state. A rotina
+  de fumaça das variantes CPS-2 e CPS-3 usa os ZIPs fornecidos localmente.
+  [Evidência e fontes oficiais](ai-context/inventario-libretro.md#cores-já-no-catálogo)
+
+- **2026-11-28 — FB Alpha 2012 CPS-2 no Windows x64**. O core entra no
+  catálogo como alternativa para Arcade. Cinco ZIPs locais passaram
+  no teste nativo de 1.800 quadros e na restauração de save state.
+  A variante tem a mesma prioridade do CPS-1 em relação aos cores
+  Arcade de uso geral. [Evidência e fontes oficiais](ai-context/inventario-libretro.md#cores-já-no-catálogo)
+
 - **2026-11-27 — FB Alpha 2012 CPS-1 no Windows x64**. O core entra no
   catálogo como alternativa para Arcade. O loader já preserva o ZIP e seu
   nome original conforme solicitado pelo core. Cinco conjuntos locais

@@ -14,8 +14,8 @@ continuam na fila.
 
 O [inventário por core](inventario-libretro.md) cruza o catálogo do ReEmu,
 os metadados oficiais e os índices do buildbot. São **261 IDs
-publicados para Windows ou Linux x64**, com **149 no catálogo** e
-**112 faltando**. Há mais **95 IDs
+publicados para Windows ou Linux x64**, com **152 no catálogo** e
+**109 faltando**. Há mais **95 IDs
 oficiais** sem pacote nesses dois índices. Cada ID faltante tem uma
 tarefa inicial e a situação do pacote. A disponibilidade de um binário
 e a compatibilidade comprovada no ReEmu são verificações distintas.
@@ -35,7 +35,7 @@ por engano.
 | Etapa | Tarefas pendentes | Resultado esperado |
 | --- | --- | --- |
 | **1. Inventário contínuo** | Corrigir a referência ao caminho antigo do catálogo em `scripts/gen_core_catalog.py`. Separar descoberta de binários da publicação no catálogo. Registrar fonte, alvo, versão, categoria, sistema e recursos. | Relatório de diferenças que inclui variantes, cores de um único alvo e lançamentos novos. |
-| **2. Alternativas para plataformas conhecidas** | bsnes-jg, Mesen-S, Mesen 2 e DoubleCherryGB entraram no catálogo e passaram testes de cartucho no Windows. FB Alpha 2012 CPS-1 abriu conjuntos de Arcade em ZIP. Conferir os recursos pendentes no inventário. A rodada em Linux está em [backlog](../../TASKS.md#testes-em-linux-x64). | Novas opções entram pelo fluxo normal, com regressões testadas nos cores padrão. |
+| **2. Alternativas para plataformas conhecidas** | bsnes-jg, Mesen-S, Mesen 2 e DoubleCherryGB entraram no catálogo e passaram testes de cartucho no Windows. FB Alpha 2012 CPS-1, CPS-2 e CPS-3 abriram conjuntos de Arcade em ZIP. Conferir os recursos pendentes no inventário. A rodada em Linux está em [backlog](../../TASKS.md#testes-em-linux-x64). | Novas opções entram pelo fluxo normal, com regressões testadas nos cores padrão. |
 | **3. Plataformas clássicas e mídia** | Hatari, Hatari 2014, hatariB e PX68k passaram o boot de disquete no Windows. O DirkSimple abriu vídeos LaserDisc com dados auxiliares, o HypseusHW abriu mídia pelo framefile Daphne e o openMSX abriu cartuchos com C-BIOS. Integrar os demais sistemas e formatos do inventário. | Importação confiável, saves persistentes e diagnóstico de arquivos de sistema ausentes. |
 | **4. Engines, aplicativos e utilitários** | Usar a capacidade de iniciar sem conteúdo quando anunciada. Criar o fluxo de seleção de pasta ou arquivo para engines e mídias. Descobrir as dependências de dados e os diretórios graváveis por core. | Cada categoria tem forma de abrir, operar e encerrar pelo ReEmu. |
 | **5. GameCube, Wii e 3DS** | Seguir o piloto Dolphin e usar Azahar para estabelecer formatos, layout e toque do 3DS. Validar Citra, Citra 2018, Citra Canary e Panda3DS individualmente. | GameCube e Wii ganham plataformas distintas, e o 3DS compartilha uma base com validação por core. [Plano Dolphin](25-dolphin-libretro.md) |

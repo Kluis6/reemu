@@ -37,10 +37,9 @@ export function rankCores(
     }
     return (systemId && c.systems.includes(systemId) ? 0 : 2) + (c.extensions.includes(ext) ? 0 : 1)
   }
-  // Um ZIP de Arcade pode ser de outra placa. Em empate, o CPS-1 fica como
-  // alternativa depois dos cores que a seleção automática já oferecia.
-  const arcadePriority = (c: InstalledCore) =>
-    c.coreId === 'fbalpha2012_cps1_libretro' ? 1 : 0
+  // Um ZIP de Arcade pode ser de outra placa. Em empate, as variantes CPS
+  // ficam depois dos cores de Arcade de uso geral.
+  const arcadePriority = (c: InstalledCore) => Number(/^fbalpha2012_cps[1-3]_libretro$/.test(c.coreId))
   return [...available].sort((a, b) =>
     score(a) - score(b) || arcadePriority(a) - arcadePriority(b) || a.name.localeCompare(b.name),
   )
