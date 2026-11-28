@@ -51,6 +51,7 @@ export function useUpdateCollectionItem(gameUuid: string, systemId: string) {
       alvanistaCollectionUpdate(gameUuid, { ...patch, system: systemId }),
     onSuccess: (next) => {
       qc.setQueryData(collectionItemKey(gameUuid), next)
+      void qc.invalidateQueries({ queryKey: ['alvanista-collection', 'profile-library'] })
     },
   })
 }

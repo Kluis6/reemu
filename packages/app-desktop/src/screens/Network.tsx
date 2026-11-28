@@ -148,7 +148,7 @@ export function Network() {
     scopes: ['friends:read'],
   })
 
-  const friends = useAlvanistaFriends(connected && hasScope)
+  const friends = useAlvanistaFriends(connected && hasScope, alva.data?.username, alva.data?.connected_at)
   const errCode = friends.isError ? socialErrorCode(friends.error) : null
   const needsConsent = !hasScope || errCode === 'needs_consent'
 

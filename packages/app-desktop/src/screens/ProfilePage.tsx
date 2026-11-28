@@ -1,41 +1,62 @@
 import { makeStyles, mergeClasses } from '@fluentui/react-components'
 import { useQuery } from '@tanstack/react-query'
-import { useMemo, type ReactNode } from 'react'
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LoadingState } from '../components/EmptyState'
+import { PAGE_PAD_B, PAGE_PAD_L, PAGE_TOP } from '../styles/metrics'
 import { ALVANISTA_STATUS_KEY, DISCONNECTED, useAlvanistaStatusSync } from '../hooks/useAlvanistaStatusSync'
 import { ALVANISTA_CACHED_KEY, useEffectiveProfile, type EffectiveProfile } from '../hooks/useEffectiveProfile'
+import { RA_STATUS_KEY } from '../hooks/useRetroAchievements'
 import {
   alvanistaCachedStatus,
   alvanistaStatus,
   getProfile,
   listRecentSaveStates,
   listRoms,
+  raStatus,
 } from '../lib/tauri'
-import { AlvanistaCardBlock, AlvanistaInvite } from './profile/AlvanistaCardBlock'
+import { AlvanistaInvite } from './profile/AlvanistaCardBlock'
+import { AlvanistaGalleries } from './profile/AlvanistaGalleries'
 import { MomentsRow } from './profile/MomentsRow'
 import { ProfileHero } from './profile/ProfileHero'
-import { hasCardContent, mostPlayed, recentlyPlayed } from './profile/profileData'
-import { MostPlayedCard, RecentRow, ReemuNumbers } from './profile/ReemuSections'
+import { mostPlayed, recentlyPlayed } from './profile/profileData'
+import { MostPlayedCard, ProfileAchievements, RecentRow, ReemuNumbers } from './profile/ReemuSections'
 
 const useStyles = makeStyles({
-  page: { width: '100%', paddingBottom: '40px' },
+  page: {
+    position: 'relative',
+    isolation: 'isolate',
+    width: '100%',
+    minHeight: `calc(100vh - var(--reemuPageTop, ${PAGE_TOP}px) - var(--reemuScrollPadB, ${PAGE_PAD_B}px) - var(--reemuInsetY, 0px))`,
+    '&::before': {
+      content: '""',
+      position: 'absolute',
+      inset: `calc(-1 * var(--reemuPageTop, ${PAGE_TOP}px)) calc(-1 * var(--reemuScrollPadR, ${PAGE_PAD_L}px) - var(--reemuInsetX, 0px)) 0 -${PAGE_PAD_L}px`,
+      zIndex: -2,
+      pointerEvents: 'none',
+      backgroundImage: 'linear-gradient(var(--reemuPage), var(--reemuPage) 78%, transparent)',
+    },
+  },
   cols: {
     display: 'grid',
-    gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
-    gap: '14px',
-    marginTop: '26px',
-    '@media (max-width: 860px)': { gridTemplateColumns: '1fr' },
+    gridTemplateColumns: 'minmax(0, 1fr) minmax(220px, 28%)',
+    columnGap: 'clamp(28px, 5vw, 82px)',
+    rowGap: '32px',
+    marginTop: 'clamp(28px, 5vw, 72px)',
+    '@media (max-width: 840px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
   },
-  // Um lado só: ocupa a linha inteira, sem deixar meia largura vazia.
   single: { gridTemplateColumns: 'minmax(0, 1fr)' },
+  column: {
+    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '32px',
+  },
 })
 
 /**
- * Meu perfil (`/perfil`), tela cheia na área de conteúdo da casca: o topo,
- * "No ReEmu", "Jogados recentemente", "Mais jogados no ReEmu" e "Seus
- * momentos" e "No Alvanista" (ou o convite). Só lê a
- * biblioteca, os saves, o perfil local e o status do Alvanista (guardado e completo); sem sessão não toca no chaveiro nem na rede.
+ * Meu perfil (`/perfil`): identidade, atividade local, status das conquistas,
+ * jogos recentes e dados da conta Alvanista, quando conectada.
  */
 export function ProfilePage() {
   const { t } = useTranslation()
@@ -43,6 +64,7 @@ export function ProfilePage() {
   const effective = useEffectiveProfile()
   // Mesma chave do `useEffectiveProfile`: só para saber se a leitura falhou.
   const local = useQuery({ queryKey: ['profile'], queryFn: getProfile, retry: false })
+  const achievements = useQuery({ queryKey: RA_STATUS_KEY, queryFn: raStatus, retry: false })
   // staleTime 0: leituras baratas do SQLite, relidas a cada vez que a página abre
   // (jogar e salvar não invalidam estas chaves).
   const roms = useQuery({ queryKey: ['roms'], queryFn: listRoms, retry: false, staleTime: 0 })
@@ -74,25 +96,16 @@ export function ProfilePage() {
       : undefined)
 
   const all = useMemo(() => roms.data ?? [], [roms.data])
-  const recent = useMemo(() => recentlyPlayed(all, 30), [all])
+  const recent = useMemo(() => recentlyPlayed(all), [all])
   const most = useMemo(() => mostPlayed(all, 5), [all])
 
   if (!profile || roms.isPending) return <LoadingState />
   // Pelo status, não pelo perfil: ao desconectar o status zera na hora.
-  const connected = !!status?.connected
+  const connected = !!status?.connected && !status.ended
   const card = connected ? status?.card : null
-  const fetchedAt = status?.fetched_at ?? null
-  // A linha de duas colunas só existe com algo dentro; com um lado só, ele
-  // ocupa a linha toda.
-  const mostEl = most.length > 0 ? <MostPlayedCard roms={most} /> : null
-  let alvaEl: ReactNode = null
-  if (connected) {
-    if (card && hasCardContent(card, fetchedAt)) alvaEl = <AlvanistaCardBlock card={card} fetchedAt={fetchedAt} />
-  } else if (!cached.isError) {
-    // Sem banco o Alvanista não tem onde guardar a sessão: sem convite.
-    alvaEl = <AlvanistaInvite />
-  }
-  const sides = [mostEl, alvaEl].filter(Boolean).length
+  const scores = achievements.data?.connected ? achievements.data : undefined
+  const showInvite = !connected && !cached.isError
+  const hasSidebar = recent.length > 0 || connected || showInvite
 
   return (
     <div className={s.page}>
@@ -102,14 +115,20 @@ export function ProfilePage() {
         onRefresh={() => void full.refetch()}
         refreshing={full.isFetching}
       />
-      <ReemuNumbers roms={all} failed={roms.isError} />
-      <RecentRow roms={recent} />
-      {sides > 0 && (
-        <div className={mergeClasses(s.cols, sides === 1 && s.single)} data-testid="profile-cols" data-sides={sides}>
-          {mostEl}
-          {alvaEl}
+      <div className={mergeClasses(s.cols, !hasSidebar && s.single)}>
+        <div className={s.column}>
+          <ProfileAchievements trophies={card?.proofs?.trophies?.count} scores={scores} />
+          {most.length > 0 && <MostPlayedCard roms={most} achievementsConnected={scores !== undefined} />}
+          <ReemuNumbers roms={all} failed={roms.isError} />
         </div>
-      )}
+        {hasSidebar && (
+          <div className={s.column} data-testid="profile-sidebar">
+            <RecentRow roms={recent} />
+            {connected && <AlvanistaGalleries key={status.username} status={status} roms={all} />}
+            {showInvite && <AlvanistaInvite />}
+          </div>
+        )}
+      </div>
       <MomentsRow states={saves.data ?? []} />
     </div>
   )

@@ -9,6 +9,8 @@ import type { AlvanistaCard, AlvanistaStatus, RecentSaveState, RomEntry } from '
 import { readableInk } from './profile/profileData'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+// O happy-dom rejeita a animação do Fluent quando o menu fecha durante o teste.
+;(Element.prototype as { animate?: unknown }).animate = undefined
 
 const api = vi.hoisted(() => ({
   listRoms: vi.fn(),
@@ -19,9 +21,16 @@ const api = vi.hoisted(() => ({
   alvanistaCachedStatus: vi.fn(),
   alvanistaOpenProfile: vi.fn(),
   alvanistaOpenSite: vi.fn(),
+  alvanistaOpenUser: vi.fn(),
+  alvanistaOpenGame: vi.fn(),
+  alvanistaProfileCheckins: vi.fn(),
+  alvanistaFriends: vi.fn(),
+  alvanistaCollectionStatus: vi.fn(),
   alvanistaDisconnect: vi.fn(),
   alvanistaConnect: vi.fn(),
   alvanistaCancel: vi.fn(),
+  raStatus: vi.fn(),
+  raGameAchievements: vi.fn(),
 }))
 
 vi.mock('../lib/tauri', async (orig) => ({
@@ -94,6 +103,7 @@ async function mount() {
             <Route path="/perfil" element={<ProfilePage />} />
             <Route path="/settings/perfil" element={<div>tela de ajustes</div>} />
             <Route path="/rom/:romId" element={<div>tela do jogo</div>} />
+            <Route path="/conquistas" element={<div>tela de conquistas</div>} />
           </Routes>
         </MemoryRouter>
       </QueryClientProvider>,
@@ -117,8 +127,14 @@ beforeEach(() => {
   api.alvanistaCachedStatus.mockResolvedValue(OFF)
   api.alvanistaOpenProfile.mockResolvedValue(undefined)
   api.alvanistaOpenSite.mockResolvedValue(undefined)
+  api.alvanistaOpenUser.mockResolvedValue(undefined)
+  api.alvanistaOpenGame.mockResolvedValue(undefined)
+  api.alvanistaProfileCheckins.mockResolvedValue({ items: [], nextPage: null })
+  api.alvanistaFriends.mockResolvedValue([])
+  api.alvanistaCollectionStatus.mockResolvedValue([])
   api.alvanistaDisconnect.mockResolvedValue(undefined)
   api.alvanistaCancel.mockResolvedValue(undefined)
+  api.raStatus.mockResolvedValue({ connected: false })
   useToastStore.setState({ queue: [] })
 })
 afterEach(async () => {
@@ -228,6 +244,7 @@ describe('ProfilePage', () => {
     expect(row.textContent).toContain('Antigo')
     expect(row.textContent).toContain('2 h 30 min')
     expect(section('profile-most-played')!.querySelector('button div')).toBeNull()
+    expect(api.raGameAchievements).not.toHaveBeenCalled()
     await act(async () => covers()[0].click())
     await settle()
     expect(document.body.textContent).toContain('tela do jogo')
@@ -237,6 +254,59 @@ describe('ProfilePage', () => {
     api.listRoms.mockResolvedValue([rom('a', { playTimeSecs: 60 })])
     await mount()
     expect(section('profile-moments')).toBeNull()
+  })
+
+  it('opens all recent covers in a dialog and keeps the nine-cover preview on close', async () => {
+    api.listRoms.mockResolvedValue(
+      Array.from({ length: 12 }, (_, i) => rom(String(i), { lastPlayedAt: i + 1 })),
+    )
+    await mount()
+    const recent = section('profile-recent')!
+    const toggle = byText('Mostrar tudo')!
+    expect(recent.querySelectorAll('.fui-Card')).toHaveLength(9)
+    expect(toggle.getAttribute('aria-haspopup')).toBe('dialog')
+    await act(async () => toggle.click())
+    const dialog = document.querySelector('[role="dialog"]')!
+    expect(dialog.querySelectorAll('.fui-Card')).toHaveLength(12)
+    const close = dialog.querySelector<HTMLButtonElement>('button[aria-label="Fechar"]')!
+    await act(async () => close.click())
+    await settle()
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    expect(recent.querySelectorAll('.fui-Card')).toHaveLength(9)
+  })
+
+  it('shows the connected RetroAchievements scores and opens the achievements page', async () => {
+    api.raStatus.mockResolvedValue({ connected: true, score: 1350, scoreSoftcore: 320 })
+    await mount()
+    expect(host.textContent).toContain('1.350 pts Hardcore')
+    expect(host.textContent).toContain('320 pts Softcore')
+    await act(async () => byText('Ver conquistas')!.click())
+    expect(host.textContent).toContain('tela de conquistas')
+  })
+
+  it('shows verified achievement counts by game, including zero unlocked', async () => {
+    api.raStatus.mockResolvedValue({ connected: true, score: 1350, scoreSoftcore: 320 })
+    api.listRoms.mockResolvedValue([
+      rom('complete', { playTimeSecs: 60 }),
+      rom('started', { playTimeSecs: 9000 }),
+      rom('zero', { playTimeSecs: 100 }),
+      rom('unidentified', { playTimeSecs: 200 }),
+    ])
+    api.raGameAchievements.mockImplementation(async (id: string) => {
+      if (id === 'unidentified') return { status: 'unidentified', totalAchievements: 0 }
+      const unlockedAchievements = { complete: 10, started: 8, zero: 0 }[id]
+      return { status: 'loaded', totalAchievements: 10, unlockedAchievements }
+    })
+    await mount()
+    const rows = [...section('profile-most-played')!.querySelectorAll('button')]
+    expect(rows[0].textContent).toContain('8/10')
+    expect(rows[0].textContent).toContain('80%')
+    expect(rows[0].querySelector('[aria-label="8 de 10 conquistas desbloqueadas"]')).toBeTruthy()
+    expect(rows[1].textContent).not.toContain('0/0')
+    expect(rows[1].querySelector('[role="img"]')).toBeNull()
+    expect(rows[2].textContent).toContain('0/10')
+    expect(rows[2].textContent).toContain('0%')
+    expect(rows[3].textContent).toContain('100%')
   })
 
   it('moments show title and slot', async () => {
@@ -268,10 +338,11 @@ describe('ProfilePage', () => {
     api.alvanistaStatus.mockResolvedValue(ON)
     await mount()
     expect(host.textContent).not.toContain('Atualizado')
-    const refresh = () => host.querySelector('[aria-label="Atualizar agora"]') as HTMLElement
-    expect(refresh()).toBeTruthy()
+    await act(async () => byText('Mais opções')!.click())
+    const refresh = document.querySelector<HTMLElement>('[role="menuitem"]')!
+    expect(refresh.textContent).toContain('Atualizar agora')
     const before = api.alvanistaStatus.mock.calls.length
-    await act(async () => refresh().click())
+    await act(async () => refresh.click())
     await settle()
     expect(api.alvanistaStatus.mock.calls.length).toBe(before + 1)
   })
@@ -342,7 +413,7 @@ describe('ProfilePage', () => {
     expect(section('profile-hero')!.textContent).toContain('Jogador')
     expect(section('profile-numbers')!.textContent).toContain('Não foi possível ler a biblioteca.')
     expect(section('profile-alvanista-invite')).toBeNull()
-    expect(section('profile-cols')).toBeNull()
+    expect(section('profile-sidebar')).toBeNull()
   })
 
   describe('Alvanista card', () => {
@@ -400,59 +471,97 @@ describe('ProfilePage', () => {
       expect(meta.textContent).toContain('Membro desde 2010')
     })
 
-    it('No Alvanista shows collection, trophies with networks, hours, finished, check-ins, gamers, up to four badges with the total, playing now', async () => {
+    it('replaces the summary with dedicated account galleries', async () => {
       connect()
       await mount()
-      const b = section('profile-alvanista')!
-      const tile = (k: string) => b.querySelector(`[data-tile="${k}"]`)!.textContent!
-      expect(tile('collection')).toContain('2.047')
-      expect(tile('collection')).toContain('44 plataformas')
-      expect(tile('trophies')).toContain('3.943')
-      expect(tile('trophies')).toContain('PlayStation')
-      expect(tile('trophies')).toContain('Xbox')
-      expect(tile('trophies')).not.toContain('psn')
-      // rede que o ReEmu não conhece: como veio
-      expect(tile('trophies')).toContain('nova-rede')
-      expect(tile('hours')).toContain('614 h')
-      expect(tile('finished')).toContain('23')
-      expect(tile('checkins')).toContain('244')
-      expect(tile('gamers')).toContain('173')
-      expect(section('profile-alvanista-badges')!.querySelectorAll('img').length).toBe(4)
-      expect(section('profile-alvanista-badges')!.textContent).toContain('27 badges')
-      expect(section('profile-alvanista-now')!.textContent).toContain('Silver Pines')
+      expect(section('profile-alvanista')).toBeNull()
+      expect(section('profile-alvanista-badges')!.querySelectorAll('img').length).toBe(5)
+      expect(section('profile-alvanista-finished')).toBeTruthy()
+      expect(section('profile-alvanista-collection')).toBeTruthy()
+      expect(section('profile-alvanista-checkins')).toBeTruthy()
     })
 
-    it('a card without badges or playing now hides just those rows', async () => {
-      connect({}, { ...FULL, badges: undefined, playing_now: undefined })
+    it('loads the remaining linked games in batches when the Finished dialog opens', async () => {
+      connect({ scopes: ['collection'] })
+      const gameId = (index: number) => `11111111-0000-0000-0000-${String(index).padStart(12, '0')}`
+      api.listRoms.mockResolvedValue(
+        Array.from({ length: 201 }, (_, index) => rom(String(index), { gameUuid: gameId(index) })),
+      )
+      api.alvanistaCollectionStatus.mockImplementation(async (ids: string[]) => ids.map((gameId) => ({
+        gameId,
+        status: gameId.endsWith('000') ? 'finished' : gameId.endsWith('200') ? 'completed' : 'played',
+      })))
       await mount()
-      expect(section('profile-alvanista')).toBeTruthy()
-      expect(section('profile-alvanista-badges')).toBeNull()
-      expect(section('profile-alvanista-now')).toBeNull()
-      expect(section('profile-alvanista')!.querySelector('[data-tile="hours"]')).toBeTruthy()
+      const section = host.querySelector('[data-testid="profile-alvanista-finished"]')!
+      const toggle = section.querySelector('button')!
+      expect(api.alvanistaCollectionStatus.mock.calls.map(([ids]) => ids.length)).toEqual([200])
+      expect(section.querySelectorAll('.fui-Card')).toHaveLength(1)
+      await act(async () => toggle.click())
+      await settle()
+      expect(api.alvanistaCollectionStatus.mock.calls.map(([ids]) => ids.length)).toEqual([200, 1])
+      const dialog = document.querySelector('[role="dialog"]')!
+      expect([...dialog.querySelectorAll('.fui-Card')].map((card) => card.getAttribute('aria-label')))
+        .toEqual(['Jogo 0', 'Jogo 200'])
     })
 
-    it('a card computed three days before the status read shows its own age and no playing now', async () => {
-      const now = Math.floor(Date.now() / 1000)
-      connect({ fetched_at: now }, { ...FULL, computed_at: new Date((now - 3 * 86400) * 1000).toISOString() })
+    it('shows public check-ins and finished games without any matching ROM or collection entry', async () => {
+      connect()
+      const id = '11111111-0000-0000-0000-000000000001'
+      const entry = {
+        id: 'checkin-1', gameId: id, title: 'Remote game', coverUrl: null,
+        status: 'finished', createdAt: '2026-11-03T12:00:00Z',
+      }
+      api.alvanistaProfileCheckins.mockImplementation(async (page: number) => page === 1
+        ? { items: [entry], nextPage: 2 }
+        : { items: [{ ...entry, id: 'checkin-2', gameId: null, title: 'Another game', status: 'playing' }], nextPage: null })
       await mount()
-      const b = section('profile-alvanista')!
-      expect(b.textContent).toContain('atualizado há 3 dias')
-      expect(section('profile-alvanista-now')).toBeNull()
-      expect(b.textContent).not.toContain('Jogando agora')
+      const finished = section('profile-alvanista-finished')!
+      expect(finished.querySelector('[aria-label="Remote game"]')).toBeTruthy()
+      await act(async () => finished.querySelector<HTMLElement>('[aria-label="Remote game"]')!.click())
+      expect(api.alvanistaOpenGame).toHaveBeenCalledWith(id)
+      expect(api.alvanistaCollectionStatus).not.toHaveBeenCalled()
+      await act(async () => section('profile-alvanista-checkins')!.querySelector('button')!.click())
+      await settle()
+      expect(api.alvanistaProfileCheckins.mock.calls.map(([page]) => page)).toEqual([1, 2])
+      expect(document.querySelector('[role="dialog"] [aria-label="Another game"]')).toBeTruthy()
+      expect(finished.querySelector('[aria-label="Another game"]')).toBeNull()
     })
 
-    it('a fresh card shows no age and keeps playing now; ten minutes old shows the age and still plays', async () => {
-      const now = Math.floor(Date.now() / 1000)
-      connect({ fetched_at: now }, { ...FULL, computed_at: new Date((now - 60) * 1000).toISOString() })
+    it('shows games explicitly marked in the collection and links to the full collection', async () => {
+      connect({ scopes: ['collection'] })
+      const gameUuid = '11111111-0000-0000-0000-000000000003'
+      api.listRoms.mockResolvedValue([rom('owned', { gameUuid })])
+      api.alvanistaCollectionStatus.mockResolvedValue([{ gameId: gameUuid, inCollection: true, status: 'unplayed' }])
       await mount()
-      expect(section('profile-alvanista')!.textContent).not.toContain('atualizado há')
-      expect(section('profile-alvanista-now')!.textContent).toContain('Silver Pines')
-      await unmount()
-      host.remove()
-      connect({ fetched_at: now }, { ...FULL, computed_at: new Date((now - 600) * 1000).toISOString() })
+      const collection = section('profile-alvanista-collection')!
+      expect(collection.querySelector('[aria-label="Jogo owned"]')).toBeTruthy()
+      await act(async () => collection.querySelector('button')!.click())
+      const openSite = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')]
+        .find((button) => button.textContent?.includes('Abrir coleção no Alvanista'))!
+      await act(async () => openSite.click())
+      expect(api.alvanistaOpenSite).toHaveBeenCalledWith('collection')
+    })
+
+    it('uses the authorized Gamers list and opens profiles by username', async () => {
+      connect({ scopes: ['friends:read'] })
+      api.alvanistaFriends.mockResolvedValue([{ id: '1', username: 'Ada', avatarUrl: null }])
       await mount()
-      expect(section('profile-alvanista')!.textContent).toContain('atualizado há 10 minutos')
-      expect(section('profile-alvanista-now')!.textContent).toContain('Silver Pines')
+      const gamers = section('profile-alvanista-gamers')!
+      await act(async () => gamers.querySelector('button')!.click())
+      const card = document.querySelector<HTMLElement>('[role="dialog"] .fui-Card')!
+      await act(async () => card.click())
+      expect(api.alvanistaOpenUser).toHaveBeenCalledWith('Ada')
+      expect(api.alvanistaCollectionStatus).not.toHaveBeenCalled()
+    })
+
+    it('offers consent in the dialog for a connected account without collection access', async () => {
+      connect()
+      await mount()
+      const toggle = section('profile-alvanista-finished')!.querySelector('button')!
+      await act(async () => toggle.click())
+      expect(document.querySelector('[role="dialog"]')!.textContent).toContain('Conectar à minha Coleção')
+      expect(api.alvanistaCollectionStatus).not.toHaveBeenCalled()
+      expect(api.alvanistaFriends).not.toHaveBeenCalled()
     })
 
     it('a card with nothing for No Alvanista hides the whole block, header included', async () => {
@@ -496,7 +605,7 @@ describe('ProfilePage', () => {
       await act(async () => {
         img.dispatchEvent(new Event('error'))
       })
-      expect(section('profile-alvanista-badges')!.querySelectorAll('img').length).toBe(3)
+      expect(section('profile-alvanista-badges')!.querySelectorAll('img').length).toBe(4)
     })
 
 
@@ -519,7 +628,7 @@ describe('ProfilePage', () => {
       await act(async () => byText('Entrar com Alvanista')!.click())
       await settle()
       expect(api.alvanistaConnect).toHaveBeenCalledTimes(1)
-      expect(section('profile-alvanista')).toBeTruthy()
+      expect(section('profile-alvanista-collection')).toBeTruthy()
     })
 
     it('a failed connect shows the outcome in the invitation', async () => {
@@ -563,33 +672,22 @@ describe('ProfilePage', () => {
       expect(layer.getAttribute('style')).toContain('#34d399')
     })
 
-    it('one platform reads in the singular', async () => {
-      connect({}, { proofs: { collection: { games: 3, platforms: 1 } } })
-      await mount()
-      const tile = section('profile-alvanista')!.querySelector('[data-tile="collection"]')!.textContent!
-      expect(tile).toContain('1 plataforma')
-      expect(tile).not.toContain('plataformas')
-    })
-
-    it('the two-column row is not rendered empty, and a lone side takes the whole row', async () => {
-      // conectado sem cartão e sem jogo com tempo: nada dos dois lados
+    it('renders the sidebar only for the recent games or Alvanista content', async () => {
       connect({}, null)
       await mount()
-      expect(section('profile-cols')).toBeNull()
+      expect(section('profile-sidebar')!.contains(section('profile-alvanista-checkins'))).toBe(true)
       await unmount()
       host.remove()
-      // só o bloco do Alvanista
       connect()
       await mount()
-      expect(section('profile-cols')!.getAttribute('data-sides')).toBe('1')
-      expect(section('profile-alvanista')).toBeTruthy()
+      expect(section('profile-sidebar')!.contains(section('profile-alvanista-collection'))).toBe(true)
       await unmount()
       host.remove()
-      // os dois lados
-      api.listRoms.mockResolvedValue([rom('a', { playTimeSecs: 60 })])
-      connect()
+      api.listRoms.mockResolvedValue([rom('a', { lastPlayedAt: 1, playTimeSecs: 60 })])
+      connect({}, null)
       await mount()
-      expect(section('profile-cols')!.getAttribute('data-sides')).toBe('2')
+      expect(section('profile-sidebar')!.contains(section('profile-recent'))).toBe(true)
+      expect(section('profile-sidebar')!.contains(section('profile-most-played'))).toBe(false)
     })
   })
 })

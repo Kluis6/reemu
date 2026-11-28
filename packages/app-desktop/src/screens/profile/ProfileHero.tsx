@@ -1,5 +1,8 @@
-import { Badge, Body1, Button, Caption1, Title1, makeStyles, tokens } from '@fluentui/react-components'
-import { ArrowClockwiseRegular } from '@fluentui/react-icons'
+import {
+  Badge, Body1, Button, Caption1, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger,
+  Title1, makeStyles, tokens,
+} from '@fluentui/react-components'
+import { ArrowClockwiseRegular, CloudRegular, MoreHorizontalRegular } from '@fluentui/react-icons'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -8,51 +11,52 @@ import { ProfileAvatar } from '../../components/ProfileAvatar'
 import type { EffectiveProfile } from '../../hooks/useEffectiveProfile'
 import { alvanistaOpenProfile, alvanistaOpenSite, type AlvanistaStatus } from '../../lib/tauri'
 import { tierAccent } from '../../lib/tierRing'
+import { PAGE_PAD_L, PAGE_TOP } from '../../styles/metrics'
 import { pickText, readableInk } from './profileData'
 import { relativeAge } from './relativeAge'
 
-const BANNER_H = 210
-const AVATAR = 128
-
 const useStyles = makeStyles({
-  hero: {
-    borderRadius: tokens.borderRadiusMedium,
-    overflow: 'hidden',
-    backgroundColor: tokens.colorNeutralBackground2,
-  },
-  // Mesmo banner do `ProfileDrawer`: a capa; sem ela, as cores do tema.
   banner: {
-    position: 'relative',
-    height: `${BANNER_H}px`,
-    backgroundImage: `linear-gradient(160deg, var(--reemuBrandAccent) 0%, ${tokens.colorBrandBackground} 100%)`,
+    position: 'absolute',
+    top: `calc(-1 * var(--reemuPageTop, ${PAGE_TOP}px))`,
+    left: `-${PAGE_PAD_L}px`,
+    right: `calc(-1 * var(--reemuScrollPadR, ${PAGE_PAD_L}px) - var(--reemuInsetX, 0px))`,
+    height: 'clamp(470px, 78vh, 760px)',
+    zIndex: -1,
+    pointerEvents: 'none',
+    backgroundImage: 'radial-gradient(ellipse at 30% 25%, var(--reemuBrandAccent), var(--reemuPage) 76%)',
     backgroundSize: 'cover',
     backgroundPosition: 'center',
-  },
-  shade: {
-    position: 'absolute',
-    inset: 0,
-    backgroundImage: `linear-gradient(180deg, transparent 35%, ${tokens.colorNeutralBackground2} 100%)`,
+    opacity: 0.34,
+    maskImage: 'linear-gradient(#000 0%, #000 20%, transparent 100%)',
+    '@media (forced-colors: active)': { display: 'none' },
   },
   body: {
     display: 'flex',
     flexWrap: 'wrap',
-    alignItems: 'flex-end',
-    columnGap: '22px',
-    rowGap: '12px',
-    padding: '0 24px 22px',
-    marginTop: `-${AVATAR / 2}px`,
-    position: 'relative',
+    alignItems: 'flex-start',
+    columnGap: 'clamp(18px, 3vw, 34px)',
+    rowGap: '20px',
+    paddingBlock: '12px 8px',
   },
-  avatar: {
-    flexShrink: 0,
-    borderRadius: tokens.borderRadiusCircular,
-    boxShadow: `0 0 0 4px ${tokens.colorNeutralBackground2}`,
+  identity: {
+    display: 'flex',
+    gap: 'clamp(16px, 2.8vw, 30px)',
+    alignItems: 'flex-start',
+    flex: '1 1 360px',
+    minWidth: 0,
+    '@media (max-width: 530px)': { flexDirection: 'column' },
   },
-  ident: { flex: 1, minWidth: '260px', display: 'flex', flexDirection: 'column', rowGap: '6px' },
-  // Título da página, na fonte de títulos dos cabeçalhos de seção.
-  name: { margin: 0, overflowWrap: 'anywhere', fontFamily: 'var(--reemuFontDisplay)' },
-  bio: { color: tokens.colorNeutralForeground2, maxWidth: '640px', overflowWrap: 'anywhere' },
-  muted: { color: tokens.colorNeutralForeground3 },
+  ident: { minWidth: 0, display: 'flex', flexDirection: 'column', rowGap: '10px' },
+  name: {
+    margin: 0,
+    overflowWrap: 'anywhere',
+    fontFamily: 'var(--reemuFontDisplay)',
+    fontSize: 'clamp(30px, 3vw, 42px)',
+    lineHeight: 1.15,
+  },
+  bio: { maxWidth: '58ch', overflowWrap: 'anywhere' },
+  muted: { color: tokens.colorNeutralForeground2 },
   badge: { alignSelf: 'flex-start' },
   chips: { display: 'flex', flexWrap: 'wrap', gap: '6px' },
   chip: {
@@ -70,15 +74,21 @@ const useStyles = makeStyles({
     display: 'flex',
     flexWrap: 'wrap',
     columnGap: '14px',
-    color: tokens.colorNeutralForeground3,
+    color: tokens.colorNeutralForeground2,
   },
-  actions: { display: 'flex', flexDirection: 'column', rowGap: '8px', alignItems: 'stretch' },
+  actions: {
+    flex: '0 0 max(220px, 28%)',
+    display: 'grid',
+    gap: '8px',
+    '@media (max-width: 760px)': { flexBasis: 'min(280px, 100%)' },
+  },
+  action: { width: '100%', minHeight: '36px', borderRadius: tokens.borderRadiusMedium },
+  menu: { maxWidth: 'none' },
   sync: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    columnGap: '4px',
-    color: tokens.colorNeutralForeground3,
+    justifyContent: 'center',
+    color: tokens.colorNeutralForeground2,
   },
 })
 
@@ -132,16 +142,19 @@ export function ProfileHero({
   const location = identity?.location || null
 
   return (
-    <section className={s.hero} data-testid="profile-hero">
-      <div className={s.banner} style={bannerStyle} data-testid="profile-banner" aria-hidden>
-        <div className={s.shade} />
-      </div>
-      <div className={s.body}>
-        <ProfileAvatar profile={profile} size={AVATAR} className={s.avatar} tier={tierColors} pulse />
+    <section className={s.body} data-testid="profile-hero">
+      <div className={s.banner} style={bannerStyle} data-testid="profile-banner" aria-hidden />
+      <div className={s.identity}>
+        <ProfileAvatar profile={profile} size={120} tier={tierColors} pulse />
         <div className={s.ident}>
           <Title1 as="h1" className={s.name}>
             {profile.name}
           </Title1>
+          {profile.bio ? (
+            <Body1 className={s.bio}>{profile.bio}</Body1>
+          ) : (
+            !connected && <Body1 className={s.muted}>{t('profilePage.noBio')}</Body1>
+          )}
           {card && (
             <div className={s.chips} data-testid="profile-chips">
               {identity?.level != null && (
@@ -170,12 +183,6 @@ export function ProfileHero({
               </span>
             </div>
           )}
-          {/* Conectado sem bio no Alvanista: nenhuma, nunca a local. */}
-          {profile.bio ? (
-            <Body1 className={s.bio}>{profile.bio}</Body1>
-          ) : (
-            !connected && <Body1 className={s.muted}>{t('profilePage.noBio')}</Body1>
-          )}
           {(location || memberYear != null) && connected && (
             <Caption1 className={s.meta} data-testid="profile-meta">
               {location && <span>{location}</span>}
@@ -189,42 +196,46 @@ export function ProfileHero({
             </Badge>
           )}
         </div>
-        <div className={s.actions}>
-          {connected ? (
-            <>
-              <Button appearance="primary" onClick={() => void alvanistaOpenProfile().catch(() => {})}>
-                {t('profilePage.viewOnAlvanista')}
-              </Button>
-              <Button appearance="outline" onClick={() => void alvanistaOpenSite('edit').catch(() => {})}>
-                {t('alvanista.editOnAlvanista')}
-              </Button>
-              {status?.save_sync === true && (
-                <Button appearance="subtle" onClick={() => navigate('/settings/sincronizacao')}>
-                  {t('profilePage.alvaCloudSave')}
-                </Button>
-              )}
-              <div className={s.sync}>
-                {fetchedAt != null && (
-                  <Caption1>
-                    {t('profilePage.updated', { age: relativeAge(fetchedAt, now, i18n.language) })}
-                  </Caption1>
-                )}
-                <Button
-                  appearance="subtle"
-                  size="small"
-                  icon={<ArrowClockwiseRegular />}
-                  aria-label={t('profilePage.refresh')}
-                  disabled={refreshing}
-                  onClick={onRefresh}
-                />
-              </div>
-            </>
-          ) : (
-            <Button appearance="primary" onClick={() => navigate('/settings/perfil')}>
-              {t('profilePage.editProfile')}
+      </div>
+      <div className={s.actions}>
+        {connected ? (
+          <>
+            <Button className={s.action} appearance="primary" onClick={() => void alvanistaOpenProfile().catch(() => {})}>
+              {t('profilePage.viewOnAlvanista')}
             </Button>
-          )}
-        </div>
+            <Button className={s.action} appearance="secondary" onClick={() => void alvanistaOpenSite('edit').catch(() => {})}>
+              {t('alvanista.editOnAlvanista')}
+            </Button>
+            <Menu positioning={{ position: 'below', align: 'end', matchTargetSize: 'width' }}>
+              <MenuTrigger disableButtonEnhancement>
+                <Button className={s.action} appearance="secondary" icon={<MoreHorizontalRegular />}>
+                  {t('profilePage.moreActions')}
+                </Button>
+              </MenuTrigger>
+            <MenuPopover className={s.menu}>
+                <MenuList>
+                  <MenuItem icon={<ArrowClockwiseRegular />} disabled={refreshing} onClick={onRefresh}>
+                    {t('profilePage.refresh')}
+                  </MenuItem>
+                  {status?.save_sync === true && (
+                    <MenuItem icon={<CloudRegular />} onClick={() => navigate('/settings/sincronizacao')}>
+                      {t('profilePage.alvaCloudSave')}
+                    </MenuItem>
+                  )}
+                </MenuList>
+              </MenuPopover>
+            </Menu>
+            {fetchedAt != null && (
+              <Caption1 className={s.sync}>
+                {t('profilePage.updated', { age: relativeAge(fetchedAt, now, i18n.language) })}
+              </Caption1>
+            )}
+          </>
+        ) : (
+          <Button className={s.action} appearance="primary" onClick={() => navigate('/settings/perfil')}>
+            {t('profilePage.editProfile')}
+          </Button>
+        )}
       </div>
     </section>
   )

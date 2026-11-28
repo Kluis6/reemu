@@ -3,13 +3,8 @@ import type { RomEntry } from '../../lib/tauri'
 import { contrastRatio } from '../../styles/themes'
 import {
   CAPTION_SCRIM,
-  cardComputedAt,
-  cardLag,
-  hasCardContent,
   mostPlayed,
-  networkLabel,
   pickText,
-  playingNow,
   profileStats,
   readableInk,
   recentlyPlayed,
@@ -66,60 +61,6 @@ describe('readableInk', () => {
   it('escolhe a tinta com contraste mínimo de 4.5:1', () => {
     expect(readableInk('#AD9F85')).toBe('#000000')
     expect(readableInk('#1B2F13')).toBe('#ffffff')
-  })
-})
-
-describe('networkLabel', () => {
-  it('dá nome às redes do servidor e deixa a desconhecida como veio', () => {
-    expect(['psn', 'xbox', 'steam', 'gog', 'retroachievements', 'epic'].map(networkLabel)).toEqual([
-      'PlayStation',
-      'Xbox',
-      'Steam',
-      'GOG',
-      'RetroAchievements',
-      'Epic',
-    ])
-    expect(networkLabel('nova')).toBe('nova')
-  })
-})
-
-describe('idade do cartão', () => {
-  const at = Date.UTC(2026, 9, 28, 12) / 1000
-  const card = { computed_at: new Date(at * 1000).toISOString(), playing_now: { title: 'Kuon' } }
-
-  it('lê o computed_at em RFC 3339 e recusa o instante zero do servidor', () => {
-    expect(cardComputedAt(card)).toBe(at)
-    expect(cardComputedAt({ computed_at: '0001-01-01T00:00:00Z' })).toBeNull()
-    expect(cardComputedAt({ computed_at: 'ontem' })).toBeNull()
-    expect(cardComputedAt({})).toBeNull()
-  })
-
-  it('a defasagem é contra a leitura do status', () => {
-    expect(cardLag(card, at + 600)).toBe(600)
-    expect(cardLag(card, null)).toBeNull()
-    expect(cardLag({}, at)).toBeNull()
-  })
-
-  it('jogando agora some depois de meia hora de defasagem', () => {
-    expect(playingNow(card, at + 29 * 60)?.title).toBe('Kuon')
-    expect(playingNow(card, at + 31 * 60)).toBeUndefined()
-    // sem as datas não dá para saber: fica
-    expect(playingNow(card, null)?.title).toBe('Kuon')
-  })
-})
-
-describe('hasCardContent', () => {
-  it('só nível não é conteúdo de "No Alvanista"', () => {
-    expect(hasCardContent({ identity: { level: 3 } }, null)).toBe(false)
-    expect(hasCardContent({ ledger: { hours: 1 } }, null)).toBe(true)
-    expect(hasCardContent({ badges: { count: 2, recent: [] } }, null)).toBe(true)
-  })
-
-  it('um jogo de agora velho não segura a seção sozinho', () => {
-    const at = 1_700_000_000
-    const card = { computed_at: new Date(at * 1000).toISOString(), playing_now: { title: 'Kuon' } }
-    expect(hasCardContent(card, at + 60)).toBe(true)
-    expect(hasCardContent(card, at + 3 * 86400)).toBe(false)
   })
 })
 

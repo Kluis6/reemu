@@ -13,9 +13,9 @@ export function socialErrorCode(err: unknown): string {
   return 'failed'
 }
 
-export function useAlvanistaFriends(enabled: boolean) {
+export function useAlvanistaFriends(enabled: boolean, username?: string | null, connectedAt?: number | null) {
   return useQuery({
-    queryKey: ALVANISTA_FRIENDS_KEY,
+    queryKey: [...ALVANISTA_FRIENDS_KEY, username ?? null, connectedAt ?? null],
     queryFn: alvanistaFriends,
     enabled,
     retry: false,

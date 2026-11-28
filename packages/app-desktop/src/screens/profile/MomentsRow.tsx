@@ -46,7 +46,7 @@ export function MomentsRow({ states }: { states: RecentSaveState[] }) {
   if (states.length === 0) return null
   return (
     <section className={s.section} data-testid="profile-moments">
-      <SectionHeader title={t('profilePage.moments')} subtitle={t('profilePage.momentsSub')} />
+      <SectionHeader title={t('profilePage.moments')} subtitle={t('profilePage.momentsSub')} onCard />
       <div className={s.row}>
         {states.map((st) => {
           const slot = st.slot == null ? t('game.auto') : t('game.slot', { n: st.slot })

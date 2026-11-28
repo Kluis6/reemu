@@ -100,6 +100,7 @@ const useStyles = makeStyles({
  */
 export function SectionHeader({
   title,
+  titleClassName,
   subtitle,
   onSeeAll,
   seeAllLabel,
@@ -108,6 +109,7 @@ export function SectionHeader({
   onCard = false,
 }: {
   title: string
+  titleClassName?: string
   subtitle?: string
   onSeeAll?: () => void
   seeAllLabel?: string
@@ -122,7 +124,7 @@ export function SectionHeader({
     <div className={s.root}>
       <div className={mergeClasses(s.heading, wallpaper)}>
         <div className={s.row}>
-          <Text as={as} className={s.title}>
+          <Text as={as} className={mergeClasses(s.title, titleClassName)}>
             {title}
           </Text>
           {onSeeAll && (
