@@ -33,12 +33,16 @@ impl Lang {
         }
     }
 
-    fn html_lang(self) -> &'static str {
+    pub fn as_tag(self) -> &'static str {
         match self {
             Self::PtBr => "pt-BR",
             Self::En => "en",
             Self::Es => "es",
         }
+    }
+
+    fn html_lang(self) -> &'static str {
+        self.as_tag()
     }
 
     fn done(self) -> &'static str {

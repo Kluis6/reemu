@@ -16,6 +16,8 @@ const api = vi.hoisted(() => ({
   alvanistaDisconnect: vi.fn(),
   alvanistaOpenProfile: vi.fn(),
   alvanistaOpenSite: vi.fn(),
+  alvanistaHomeHighlights: vi.fn(),
+  alvanistaSetHomeHighlightsEnabled: vi.fn(),
   getProfile: vi.fn(),
 }))
 
@@ -89,6 +91,8 @@ beforeEach(() => {
   api.alvanistaOpenProfile.mockResolvedValue(undefined)
   api.alvanistaOpenSite.mockResolvedValue(undefined)
   api.alvanistaDisconnect.mockResolvedValue(undefined)
+  api.alvanistaHomeHighlights.mockResolvedValue({ enabled: true, items: [] })
+  api.alvanistaSetHomeHighlightsEnabled.mockResolvedValue(undefined)
   useToastStore.setState({ queue: [] })
 })
 afterEach(async () => {
@@ -111,7 +115,7 @@ describe('SettingsProfile with Alvanista', () => {
     await mount()
     expect(host.textContent).toContain('toy')
     expect(host.querySelector('img[src="https://cdn.alvanista.com/a/toy.png"]')).toBeTruthy()
-    expect(host.querySelector('input')).toBeNull()
+    expect(host.querySelector('input:not([role="switch"])')).toBeNull()
     expect(byText('Entrar com Alvanista')).toBeUndefined()
     await act(async () => byText('Editar no Alvanista')!.click())
     expect(api.alvanistaOpenSite).toHaveBeenCalledWith('edit')
@@ -283,5 +287,27 @@ describe('SettingsProfile with Alvanista', () => {
     await unmount()
     expect(api.alvanistaCancel).toHaveBeenCalledTimes(1)
     unmount = async () => {}
+  })
+
+  it('toggles Alvanista home screen highlights in both disconnected and connected views', async () => {
+    await mount()
+    const sw = host.querySelector<HTMLInputElement>('input[role="switch"]')!
+    expect(sw).toBeTruthy()
+    expect(sw.checked).toBe(true)
+    expect(host.textContent).toContain('Mostrar destaques do Alvanista na tela inicial')
+
+    await act(async () => sw.click())
+    await settle()
+    expect(api.alvanistaSetHomeHighlightsEnabled).toHaveBeenCalledWith(false)
+
+    await unmount()
+    api.alvanistaStatus.mockResolvedValue(ON)
+    api.alvanistaHomeHighlights.mockResolvedValue({ enabled: false, items: [] })
+    await mount()
+    const swConnected = host.querySelector<HTMLInputElement>('input[role="switch"]')!
+    expect(swConnected.checked).toBe(false)
+    await act(async () => swConnected.click())
+    await settle()
+    expect(api.alvanistaSetHomeHighlightsEnabled).toHaveBeenCalledWith(true)
   })
 })

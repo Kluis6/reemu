@@ -536,6 +536,8 @@ const es: Messages = {
     offlineBadge: 'Sin conexión: mostrando el último perfil guardado',
     ended: 'Conexión con Alvanista finalizada',
     unknownUser: 'Cuenta de Alvanista',
+    homeHighlightsToggle: 'Mostrar destacados de Alvanista en la pantalla de inicio',
+    homeHighlightsHint: 'Incluye invitación o actividad de tu perfil, además de hasta 2 artículos y reseñas en el carrusel de inicio.',
   },
   sync: {
     explain: "Conecta tu cuenta de Alvanista para guardar los saves de esta máquina en tu cuenta.",
@@ -816,6 +818,15 @@ const es: Messages = {
     recentSub: 'Lo último que entró en la biblioteca',
     emptyPlatform: 'Nada en esta plataforma',
     emptyPlatformHint: 'Ajusta la búsqueda o vuelve a la biblioteca.',
+    alvanista: {
+      kicker: 'Alvanista',
+      inviteSub: 'Conecta tu cuenta para sincronizar saves, logros y tu perfil.',
+      playingNowKicker: 'Jugando ahora',
+      recentBadgeKicker: 'Nueva insignia en Alvanista',
+      openProfileSub: 'Ver en tu perfil',
+      articleKicker: 'Artículo en Alvanista',
+      reviewKicker: 'Reseña en Alvanista',
+    },
   },
   play: {
     quickSaved: 'QuickSave guardado.',

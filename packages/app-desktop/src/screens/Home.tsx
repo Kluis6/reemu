@@ -16,7 +16,11 @@ import {
   type GroupedRomEntry,
 } from "../lib/romGrouping";
 import { Shelf } from "../components/Shelf";
+import { useAlvanistaHome } from "../hooks/useAlvanistaHome";
+import { ALVANISTA_CACHED_KEY } from "../hooks/useEffectiveProfile";
 import {
+  alvanistaCachedStatus,
+  alvanistaOpenHomeItem,
   listRoms,
   scanLibrary,
   type ScanProgress,
@@ -79,6 +83,13 @@ export function Home() {
     retry: false,
   });
   const uiLang = i18n.resolvedLanguage ?? i18n.language;
+  const alvaCached = useQuery({
+    queryKey: ALVANISTA_CACHED_KEY,
+    queryFn: alvanistaCachedStatus,
+    retry: false,
+    staleTime: 0,
+  });
+  const alvaHome = useAlvanistaHome(uiLang);
   const all = useMemo(
     () => groupRoms(roms.data ?? [], uiLang),
     [roms.data, uiLang],
@@ -210,6 +221,20 @@ export function Home() {
       <HeroCarousel
         items={featured}
         onOpen={(id) => navigate(`/rom/${id}`)}
+        alvanista={
+          alvaHome.data
+            ? {
+                enabled: alvaHome.data.enabled,
+                status: !alvaCached.isPending && !alvaCached.isError ? alvaCached.data : null,
+                news: alvaHome.data.items,
+                onConnectClick: () => navigate("/settings/perfil"),
+                onProfileClick: () => navigate("/perfil"),
+                onOpenNews: (id) => {
+                  void alvanistaOpenHomeItem(id).catch(() => {});
+                },
+              }
+            : undefined
+        }
       />
 
       <div className={s.toolbar} style={{ marginTop: 12 }}>

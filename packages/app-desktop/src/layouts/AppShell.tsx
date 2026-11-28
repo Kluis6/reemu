@@ -42,6 +42,7 @@ import { useFocusMemory } from "../hooks/useFocusMemory";
 import { useNavHints } from "../hooks/useNavHints";
 import { useShaderFailures } from "../hooks/useShaderFailures";
 import { useAlvanistaStatusEvents, useEffectiveProfile } from "../hooks/useEffectiveProfile";
+import { useAlvanistaHomeEvents } from "../hooks/useAlvanistaHome";
 import { useCatalogEvents } from "../hooks/useCatalog";
 import { useSyncEvents } from "../hooks/useSync";
 import { useFullscreen } from "../hooks/useFullscreen";
@@ -132,6 +133,7 @@ export function AppShell() {
   // perfil local fica guardado e volta ao desconectar.
   const profile = useEffectiveProfile();
   useAlvanistaStatusEvents();
+  useAlvanistaHomeEvents();
   useCatalogEvents();
   useSyncEvents();
   const search = useSearchStore();
