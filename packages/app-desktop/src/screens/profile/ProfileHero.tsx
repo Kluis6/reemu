@@ -2,13 +2,14 @@ import {
   Badge, Body1, Button, Caption1, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger,
   Title1, makeStyles, tokens,
 } from '@fluentui/react-components'
-import { ArrowClockwiseRegular, CloudRegular, MoreHorizontalRegular } from '@fluentui/react-icons'
+import { ArrowClockwiseRegular, ArrowLeftRegular, CloudRegular, MoreHorizontalRegular } from '@fluentui/react-icons'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import symbol from '../../assets/alvanista-symbol.svg'
 import { ProfileAvatar } from '../../components/ProfileAvatar'
 import type { EffectiveProfile } from '../../hooks/useEffectiveProfile'
+import { navigateBack } from '../../lib/focusNav'
 import { alvanistaOpenProfile, alvanistaOpenSite, type AlvanistaStatus } from '../../lib/tauri'
 import { tierAccent } from '../../lib/tierRing'
 import { PAGE_PAD_L, PAGE_TOP } from '../../styles/metrics'
@@ -30,6 +31,15 @@ const useStyles = makeStyles({
     opacity: 0.34,
     maskImage: 'linear-gradient(#000 0%, #000 20%, transparent 100%)',
     '@media (forced-colors: active)': { display: 'none' },
+  },
+  hero: {
+    display: 'flex',
+    flexDirection: 'column',
+    rowGap: '8px',
+  },
+  topBar: {
+    display: 'flex',
+    alignItems: 'center',
   },
   body: {
     display: 'flex',
@@ -142,10 +152,21 @@ export function ProfileHero({
   const location = identity?.location || null
 
   return (
-    <section className={s.body} data-testid="profile-hero">
+    <section className={s.hero} data-testid="profile-hero">
       <div className={s.banner} style={bannerStyle} data-testid="profile-banner" aria-hidden />
-      <div className={s.identity}>
-        <ProfileAvatar profile={profile} size={120} tier={tierColors} pulse />
+      <div className={s.topBar}>
+        <Button
+          appearance="secondary"
+          size="small"
+          icon={<ArrowLeftRegular />}
+          onClick={() => navigateBack(navigate)}
+        >
+          {t('hints.back')}
+        </Button>
+      </div>
+      <div className={s.body}>
+        <div className={s.identity}>
+          <ProfileAvatar profile={profile} size={120} tier={tierColors} pulse />
         <div className={s.ident}>
           <Title1 as="h1" className={s.name}>
             {profile.name}
@@ -236,6 +257,7 @@ export function ProfileHero({
             {t('profilePage.editProfile')}
           </Button>
         )}
+        </div>
       </div>
     </section>
   )

@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   adjustEngaged,
+  closeTopmostOverlay,
   cycleTab,
   disengage,
   engage,
@@ -9,7 +10,10 @@ import {
   isAdjustable,
   moveFocus,
   navCandidates,
+  navigateBack,
   navScope,
+  topmostModalSurface,
+  topmostOverlay,
 } from './focusNav'
 
 /** jsdom não faz layout: cada elemento recebe uma caixa em `data-box` (x,y). */
@@ -178,5 +182,61 @@ describe('LB/RB', () => {
   it('sem abas, não faz nada', () => {
     document.body.innerHTML = '<button data-box="0,0"></button>'
     expect(cycleTab(1)).toBe(false)
+  })
+})
+
+describe('fechamento de camadas e retorno de rota', () => {
+  it('topmostModalSurface retorna a superfície modal do topo e ignora menus leves', () => {
+    document.body.innerHTML = `
+      <div class="fui-OverlayDrawer" id="drawer" data-box="0,0"></div>
+      <div class="fui-DialogSurface" id="dialog" data-box="0,0"></div>
+      <div role="menu" id="menu" data-box="0,0"></div>`
+    expect(topmostOverlay()?.id).toBe('menu')
+    expect(topmostModalSurface()?.id).toBe('dialog')
+  })
+
+  it('closeTopmostOverlay clica o botão de fechar da camada do topo sem fechar a de baixo', () => {
+    document.body.innerHTML = `
+      <div class="fui-OverlayDrawer" id="drawer" data-box="0,0">
+        <button id="fechar-drawer" data-overlay-close="" data-box="0,0"></button>
+      </div>
+      <div class="fui-DialogSurface" id="dialog" data-box="0,0">
+        <button id="fechar-dialog" data-overlay-close="" data-box="0,0"></button>
+      </div>`
+    const clicked: string[] = []
+    document.body.addEventListener('click', (e) => clicked.push((e.target as HTMLElement).id))
+    expect(closeTopmostOverlay()).toBe(true)
+    expect(clicked).toEqual(['fechar-dialog'])
+  })
+
+  it('closeTopmostOverlay(true) ignora o drawer de pausa, mas fecha diálogo aberto por cima dele', () => {
+    document.body.innerHTML = `
+      <div class="fui-OverlayDrawer" id="pausa" data-pause-drawer="" data-box="0,0">
+        <button id="fechar-pausa" data-overlay-close="" data-box="0,0"></button>
+      </div>`
+    expect(closeTopmostOverlay(true)).toBe(false)
+
+    const dlg = document.createElement('div')
+    dlg.className = 'fui-DialogSurface'
+    dlg.setAttribute('data-box', '0,0')
+    dlg.innerHTML = '<button id="fechar-modal" data-overlay-close="" data-box="0,0"></button>'
+    document.body.appendChild(dlg)
+
+    const clicked: string[] = []
+    document.body.addEventListener('click', (e) => clicked.push((e.target as HTMLElement).id))
+    expect(closeTopmostOverlay(true)).toBe(true)
+    expect(clicked).toEqual(['fechar-modal'])
+  })
+
+  it('navigateBack volta no histórico quando idx > 0 e vai para a tela inicial quando idx === 0', () => {
+    const nav = vi.fn()
+    window.history.replaceState({ idx: 2 }, '')
+    navigateBack(nav)
+    expect(nav).toHaveBeenCalledWith(-1)
+
+    nav.mockClear()
+    window.history.replaceState({ idx: 0 }, '')
+    navigateBack(nav)
+    expect(nav).toHaveBeenCalledWith('/', { replace: true })
   })
 })

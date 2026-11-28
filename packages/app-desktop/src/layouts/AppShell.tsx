@@ -40,6 +40,7 @@ import { useCoreUpdates } from "../hooks/useCoreUpdates";
 import { usePackUpdates } from "../hooks/usePackUpdates";
 import { useFocusMemory } from "../hooks/useFocusMemory";
 import { useNavHints } from "../hooks/useNavHints";
+import { navigateBack } from "../lib/focusNav";
 import { useShaderFailures } from "../hooks/useShaderFailures";
 import { useAlvanistaStatusEvents, useEffectiveProfile } from "../hooks/useEffectiveProfile";
 import { useAlvanistaHomeEvents } from "../hooks/useAlvanistaHome";
@@ -245,7 +246,7 @@ export function AppShell() {
                 className={mergeClasses("reemu-nav-back", l.navBtn, s.navIconBtn, s.navIconLg)}
                 icon={<ChevronLeftRegular />}
                 aria-label={t("hints.back")}
-                onClick={() => navigate(-1)}
+                onClick={() => navigateBack(navigate)}
               />
             </Tooltip>
           )}

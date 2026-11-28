@@ -10,6 +10,7 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useSearchStore, type KeyboardField } from '../stores/useSearchStore'
 import { CloseButton } from './CloseButton'
+import { topmostModalSurface } from '../lib/focusNav'
 
 /**
  * Teclado na tela pra digitar com o controle — na busca (Y) ou num campo de
@@ -477,10 +478,10 @@ export function OnScreenKeyboard() {
       </div>
     </div>
   )
-  // Com um modal aberto (ex.: o onboarding), o teclado vai DENTRO dele: o
-  // Dialog do Fluent fica num portal por cima do app e prende o foco no
-  // próprio conteúdo — fora dele as teclas ficariam atrás e sem foco.
-  // O OverlayDrawer (menu de pausa) também é modal e prende o foco.
-  const surface = document.querySelector<HTMLElement>('.fui-DialogSurface, .fui-OverlayDrawer')
+  // Com um modal aberto, o teclado vai DENTRO da superfície modal mais ao topo:
+  // o Dialog/OverlayDrawer do Fluent fica num portal por cima do app e prende o
+  // foco no próprio conteúdo; escolher o último portal aberto evita renderizar
+  // atrás de um FullscreenDialog aberto sobre um drawer.
+  const surface = topmostModalSurface()
   return surface ? createPortal(panel, surface) : panel
 }

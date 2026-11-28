@@ -2,14 +2,17 @@ import { useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   adjustEngaged,
+  closeTopmostOverlay,
   cycleTab,
   disengage,
   engage,
   engagedControl,
   isAdjustable,
   moveFocus,
+  navigateBack,
   pageFocus,
   toggleRailFocus,
+  topmostOverlay,
   type NavDir,
 } from '../lib/focusNav'
 import { onMenuNav, toggleFocus } from '../lib/tauri'
@@ -140,13 +143,28 @@ export function useMenuNav() {
         contextMenu()
         return
       }
+      // Teclado fora de campos de texto: Alt+SetaEsquerda, BrowserBack ou Escape
+      // (quando não há modal/menu aberto tratando o próprio Escape) voltam de tela.
+      if (
+        (e.key === 'BrowserBack' ||
+          (e.altKey && e.key === 'ArrowLeft') ||
+          (e.key === 'Escape' && !e.defaultPrevented && !topmostOverlay())) &&
+        !locRef.current.startsWith('/play/') &&
+        locRef.current !== '/onboarding' &&
+        locRef.current !== '/'
+      ) {
+        e.preventDefault()
+        playUiSound('back')
+        navigateBack(navigate)
+        return
+      }
       const map: Record<string, NavDir> = {
         ArrowUp: 'up',
         ArrowDown: 'down',
         ArrowLeft: 'left',
         ArrowRight: 'right',
       }
-      if (map[e.key] && !onPlayIdle()) {
+      if (map[e.key] && !onPlayIdle() && !e.altKey) {
         e.preventDefault()
         moveFocus(map[e.key])
       }
@@ -218,32 +236,18 @@ export function useMenuNav() {
           break
         }
         case 'back': {
-          // Drawer ou modal aberto (perfil, Informações, Encerrar...): o B
-          // fecha ele, como o Esc do teclado — o Fluent fecha no `keydown`
-          // de Escape dentro da superfície. Antes o B voltava a página por
-          // trás do painel aberto.
-          // Menu e popover vêm antes: podem estar abertos dentro de um drawer.
-          const modal =
-            document.querySelector<HTMLElement>('[role="menu"], .fui-PopoverSurface') ??
-            document.querySelector<HTMLElement>('.fui-OverlayDrawer, .fui-DialogSurface')
-          if (locRef.current.startsWith('/play/') && !launchAsk()) void toggleFocus().catch(() => {})
-          // o onboarding é um modal também, mas o B nele volta um passo
-          else if (locRef.current === '/onboarding')
+          // Camada modal/menu mais ao topo (inclusive diálogos ou menus abertos
+          // por cima do PauseMenu durante `/play/`): fecha sempre a camada do topo
+          // primeiro. No `/play/` sem subcamada acima do PauseMenu, alterna o foco.
+          const onPlay = locRef.current.startsWith('/play/') && !launchAsk()
+          if (locRef.current === '/onboarding') {
             window.dispatchEvent(new CustomEvent(REEMU_ONBOARDING_BACK))
-          else if (modal) {
-            const target =
-              document.activeElement instanceof HTMLElement && modal.contains(document.activeElement)
-                ? document.activeElement
-                : modal
-            target.dispatchEvent(
-              new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true }),
-            )
+          } else if (closeTopmostOverlay(onPlay)) {
+            // fechou a camada aberta do topo
+          } else if (onPlay) {
+            void toggleFocus().catch(() => {})
           } else if (locRef.current !== '/') {
-            // Sem histórico (a tela abriu direto), volta ao Início. No Início,
-            // o B não tem para onde ir.
-            const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0
-            if (idx > 0) navigate(-1)
-            else navigate('/', { replace: true })
+            navigateBack(navigate)
           }
           break
         }

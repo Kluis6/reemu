@@ -586,19 +586,12 @@ html[data-nav-focus] .reemu-no-ring:focus-within {
   pointer-events: none;
 }
 
-/* Controle em uso (`data-nav-focus`, ver lib/focusNav.ts): sem cursor, sem hover e
-   sem botão Voltar, porque o B já volta. O mouse desfaz isso ao se mexer. */
+/* Controle em uso (`data-nav-focus`, ver lib/focusNav.ts): esconde só o cursor
+   até o mouse se mexer ou clicar; mantém `pointer-events` e o botão Voltar
+   visíveis para nunca bloquear cliques nem esconder como sair da tela. */
 html[data-nav-focus],
 html[data-nav-focus] * {
   cursor: none !important;
-}
-
-html[data-nav-focus] body {
-  pointer-events: none;
-}
-
-html[data-nav-focus] .reemu-nav-back {
-  visibility: hidden;
 }
 
 /* Seletor ou slider em ajuste com o controle (A entra, B sai). */
