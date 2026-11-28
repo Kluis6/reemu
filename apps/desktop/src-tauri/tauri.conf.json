@@ -28,7 +28,7 @@
         "default-src": "'self'",
         "script-src": "'self'",
         "style-src": "'self' 'unsafe-inline'",
-        "img-src": "'self' data: blob: cover: http://cover.localhost media: http://media.localhost https:",
+        "img-src": "'self' data: blob: cover: http://cover.localhost media: http://media.localhost rabadge: http://rabadge.localhost https:",
         "font-src": "'self' data:",
         "media-src": "'self' blob: https:",
         "connect-src": "'self' ipc: http://ipc.localhost",

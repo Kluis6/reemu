@@ -68,9 +68,14 @@ import type { VideoConfig } from './bindings/VideoConfig'
 import type { InstalledCore } from './bindings/InstalledCore'
 import type { LoadedGame } from './bindings/LoadedGame'
 import type { RaAchievement } from './bindings/RaAchievement'
+import type { RaChallenge } from './bindings/RaChallenge'
 import type { RaGameLoadedEvent } from './bindings/RaGameLoadedEvent'
 import type { RaGameView } from './bindings/RaGameView'
+import type { RaLeaderboard } from './bindings/RaLeaderboard'
+import type { RaLeaderboardEvent } from './bindings/RaLeaderboardEvent'
+import type { RaLiveUpdatedEvent } from './bindings/RaLiveUpdatedEvent'
 import type { RaStatus } from './bindings/RaStatus'
+import type { RaTracker } from './bindings/RaTracker'
 import type { RaUnlockEvent } from './bindings/RaUnlockEvent'
 
 const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
@@ -1280,7 +1285,18 @@ export async function appVersion(): Promise<string> {
 
 // --- RetroAchievements (`src-tauri/src/ra.rs`) ----------------------------
 
-export type { RaAchievement, RaGameLoadedEvent, RaGameView, RaStatus, RaUnlockEvent }
+export type {
+  RaAchievement,
+  RaChallenge,
+  RaGameLoadedEvent,
+  RaGameView,
+  RaLeaderboard,
+  RaLeaderboardEvent,
+  RaLiveUpdatedEvent,
+  RaStatus,
+  RaTracker,
+  RaUnlockEvent,
+}
 
 export const raStatus = () => invoke<RaStatus>('ra_status')
 
@@ -1321,6 +1337,20 @@ export async function onRaAchievementUnlocked(cb: (ev: RaUnlockEvent) => void): 
   if (!inTauri) return () => {}
   const { listen } = await import('@tauri-apps/api/event')
   return listen<RaUnlockEvent>('ra-achievement-unlocked', (e) => cb(e.payload))
+}
+
+export async function onRaLeaderboardEvent(
+  cb: (ev: RaLeaderboardEvent) => void,
+): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<RaLeaderboardEvent>('ra-leaderboard-event', (e) => cb(e.payload))
+}
+
+export async function onRaLiveUpdated(cb: (ev: RaLiveUpdatedEvent) => void): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<RaLiveUpdatedEvent>('ra-live-updated', (e) => cb(e.payload))
 }
 
 // --- Meu Log + thread automatica de check-in da sessao (`gamelog.rs`) -----

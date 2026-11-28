@@ -49,13 +49,34 @@ pub const RC_CLIENT_ACHIEVEMENT_TYPE_MISSABLE: u8 = 1;
 pub const RC_CLIENT_ACHIEVEMENT_TYPE_PROGRESSION: u8 = 2;
 pub const RC_CLIENT_ACHIEVEMENT_TYPE_WIN: u8 = 3;
 
+pub const RC_CLIENT_LEADERBOARD_STATE_INACTIVE: u8 = 0;
+pub const RC_CLIENT_LEADERBOARD_STATE_ACTIVE: u8 = 1;
+pub const RC_CLIENT_LEADERBOARD_STATE_TRACKING: u8 = 2;
+pub const RC_CLIENT_LEADERBOARD_STATE_DISABLED: u8 = 3;
+
+pub const RC_CLIENT_LEADERBOARD_FORMAT_TIME: u8 = 0;
+pub const RC_CLIENT_LEADERBOARD_FORMAT_SCORE: u8 = 1;
+pub const RC_CLIENT_LEADERBOARD_FORMAT_VALUE: u8 = 2;
+
+pub const RC_CLIENT_LEADERBOARD_LIST_GROUPING_NONE: c_int = 0;
+pub const RC_CLIENT_LEADERBOARD_LIST_GROUPING_TRACKING: c_int = 1;
+
+pub const RC_CLIENT_LEADERBOARD_DISPLAY_SIZE: usize = 24;
+
 pub const RC_CLIENT_EVENT_TYPE_NONE: u32 = 0;
 pub const RC_CLIENT_EVENT_ACHIEVEMENT_TRIGGERED: u32 = 1;
+pub const RC_CLIENT_EVENT_LEADERBOARD_STARTED: u32 = 2;
+pub const RC_CLIENT_EVENT_LEADERBOARD_FAILED: u32 = 3;
+pub const RC_CLIENT_EVENT_LEADERBOARD_SUBMITTED: u32 = 4;
 pub const RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_SHOW: u32 = 5;
 pub const RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_HIDE: u32 = 6;
 pub const RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_SHOW: u32 = 7;
 pub const RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_HIDE: u32 = 8;
 pub const RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_UPDATE: u32 = 9;
+pub const RC_CLIENT_EVENT_LEADERBOARD_TRACKER_SHOW: u32 = 10;
+pub const RC_CLIENT_EVENT_LEADERBOARD_TRACKER_HIDE: u32 = 11;
+pub const RC_CLIENT_EVENT_LEADERBOARD_TRACKER_UPDATE: u32 = 12;
+pub const RC_CLIENT_EVENT_LEADERBOARD_SCOREBOARD: u32 = 13;
 pub const RC_CLIENT_EVENT_RESET: u32 = 14;
 pub const RC_CLIENT_EVENT_GAME_COMPLETED: u32 = 15;
 pub const RC_CLIENT_EVENT_SERVER_ERROR: u32 = 16;
@@ -153,6 +174,56 @@ pub struct rc_client_achievement_list_t {
 }
 
 #[repr(C)]
+pub struct rc_client_leaderboard_t {
+    pub title: *const c_char,
+    pub description: *const c_char,
+    pub tracker_value: *const c_char,
+    pub id: u32,
+    pub state: u8,
+    pub format: u8,
+    pub lower_is_better: u8,
+}
+
+#[repr(C)]
+pub struct rc_client_leaderboard_tracker_t {
+    pub display: [c_char; RC_CLIENT_LEADERBOARD_DISPLAY_SIZE],
+    pub id: u32,
+}
+
+#[repr(C)]
+pub struct rc_client_leaderboard_bucket_t {
+    pub leaderboards: *const *const rc_client_leaderboard_t,
+    pub num_leaderboards: u32,
+    pub label: *const c_char,
+    pub subset_id: u32,
+    pub bucket_type: u8,
+}
+
+#[repr(C)]
+pub struct rc_client_leaderboard_list_t {
+    pub buckets: *const rc_client_leaderboard_bucket_t,
+    pub num_buckets: u32,
+}
+
+#[repr(C)]
+pub struct rc_client_leaderboard_scoreboard_entry_t {
+    pub username: *const c_char,
+    pub rank: u32,
+    pub score: [c_char; RC_CLIENT_LEADERBOARD_DISPLAY_SIZE],
+}
+
+#[repr(C)]
+pub struct rc_client_leaderboard_scoreboard_t {
+    pub leaderboard_id: u32,
+    pub submitted_score: [c_char; RC_CLIENT_LEADERBOARD_DISPLAY_SIZE],
+    pub best_score: [c_char; RC_CLIENT_LEADERBOARD_DISPLAY_SIZE],
+    pub new_rank: u32,
+    pub num_entries: u32,
+    pub top_entries: *const rc_client_leaderboard_scoreboard_entry_t,
+    pub num_top_entries: u32,
+}
+
+#[repr(C)]
 pub struct rc_client_server_error_t {
     pub error_message: *const c_char,
     pub api: *const c_char,
@@ -164,9 +235,9 @@ pub struct rc_client_server_error_t {
 pub struct rc_client_event_t {
     pub r#type: u32,
     pub achievement: *const rc_client_achievement_t,
-    pub leaderboard: *const c_void,
-    pub leaderboard_tracker: *const c_void,
-    pub leaderboard_scoreboard: *const c_void,
+    pub leaderboard: *const rc_client_leaderboard_t,
+    pub leaderboard_tracker: *const rc_client_leaderboard_tracker_t,
+    pub leaderboard_scoreboard: *const rc_client_leaderboard_scoreboard_t,
     pub server_error: *const rc_client_server_error_t,
     pub subset: *const c_void,
 }
@@ -453,6 +524,24 @@ extern "C" {
     ) -> *mut rc_client_achievement_list_t;
     pub fn rc_client_destroy_achievement_list(list: *mut rc_client_achievement_list_t);
     pub fn rc_client_has_achievements(client: *mut rc_client_t) -> c_int;
+
+    pub fn rc_client_get_leaderboard_info(
+        client: *const rc_client_t,
+        id: u32,
+    ) -> *const rc_client_leaderboard_t;
+    pub fn rc_client_create_leaderboard_list(
+        client: *mut rc_client_t,
+        grouping: c_int,
+    ) -> *mut rc_client_leaderboard_list_t;
+    pub fn rc_client_destroy_leaderboard_list(list: *mut rc_client_leaderboard_list_t);
+    pub fn rc_client_has_leaderboards(client: *mut rc_client_t) -> c_int;
+
+    pub fn rc_client_has_rich_presence(client: *mut rc_client_t) -> c_int;
+    pub fn rc_client_get_rich_presence_message(
+        client: *mut rc_client_t,
+        buffer: *mut c_char,
+        buffer_size: usize,
+    ) -> usize;
 
     pub fn rc_client_is_processing_required(client: *mut rc_client_t) -> c_int;
     pub fn rc_client_do_frame(client: *mut rc_client_t);

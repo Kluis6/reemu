@@ -16,7 +16,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { raGameKey } from '../hooks/useRetroAchievements'
-import { raGameAchievements, type RaAchievement } from '../lib/tauri'
+import { raGameAchievements, type RaAchievement, type RaLeaderboard } from '../lib/tauri'
 import { EmptyState, LoadingState } from './EmptyState'
 
 const useStyles = makeStyles({
@@ -61,8 +61,52 @@ const useStyles = makeStyles({
     flexWrap: 'wrap',
     gap: tokens.spacingHorizontalS,
   },
+  richPresenceRow: {
+    display: 'flex',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: tokens.spacingHorizontalS,
+    marginTop: '2px',
+  },
+  liveStrip: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalXS,
+  },
+  liveItem: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: tokens.spacingHorizontalS,
+    padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalM}`,
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: 'var(--reemuControlFill)',
+    flexWrap: 'wrap',
+  },
+  liveItemMain: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
+    minWidth: 0,
+  },
+  challengeThumb: {
+    width: '28px',
+    height: '28px',
+    borderRadius: tokens.borderRadiusSmall,
+    objectFit: 'cover',
+    flexShrink: 0,
+  },
+  trackerValue: {
+    fontVariantNumeric: 'tabular-nums',
+    fontWeight: tokens.fontWeightSemibold,
+  },
   dim: {
     color: tokens.colorNeutralForeground3,
+  },
+  sections: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: tokens.spacingHorizontalXS,
   },
   filters: {
     display: 'flex',
@@ -133,6 +177,7 @@ const useStyles = makeStyles({
 })
 
 type FilterMode = 'all' | 'locked' | 'unlocked'
+type SectionMode = 'achievements' | 'leaderboards'
 
 function kindBadgeMeta(kind: RaAchievement['kind']): {
   key: 'achievements.badgeMissable' | 'achievements.badgeProgression' | 'achievements.badgeWin'
@@ -142,6 +187,37 @@ function kindBadgeMeta(kind: RaAchievement['kind']): {
   if (kind === 'progression') return { key: 'achievements.badgeProgression', color: 'informative' }
   if (kind === 'win_condition') return { key: 'achievements.badgeWin', color: 'success' }
   return null
+}
+
+function leaderboardStateMeta(state: RaLeaderboard['state']): {
+  key:
+    | 'achievements.leaderboardTracking'
+    | 'achievements.leaderboardActive'
+    | 'achievements.badgeUnsupported'
+    | 'achievements.leaderboardInactive'
+  color: 'warning' | 'informative' | 'danger' | 'subtle'
+} {
+  if (state === 'tracking') {
+    return { key: 'achievements.leaderboardTracking', color: 'warning' }
+  }
+  if (state === 'active') {
+    return { key: 'achievements.leaderboardActive', color: 'informative' }
+  }
+  if (state === 'disabled') {
+    return { key: 'achievements.badgeUnsupported', color: 'danger' }
+  }
+  return { key: 'achievements.leaderboardInactive', color: 'subtle' }
+}
+
+function leaderboardFormatKey(
+  format: RaLeaderboard['format'],
+):
+  | 'achievements.leaderboardFormatTime'
+  | 'achievements.leaderboardFormatScore'
+  | 'achievements.leaderboardFormatValue' {
+  if (format === 'time') return 'achievements.leaderboardFormatTime'
+  if (format === 'score') return 'achievements.leaderboardFormatScore'
+  return 'achievements.leaderboardFormatValue'
 }
 
 export function GameAchievementsPanel({
@@ -158,6 +234,7 @@ export function GameAchievementsPanel({
   const { t } = useTranslation()
   const s = useStyles()
   const [filter, setFilter] = useState<FilterMode>('all')
+  const [section, setSection] = useState<SectionMode>('achievements')
 
   const query = useQuery({
     queryKey: raGameKey(romId),
@@ -168,6 +245,15 @@ export function GameAchievementsPanel({
   })
 
   const items = useMemo(() => query.data?.achievements ?? [], [query.data?.achievements])
+  const leaderboards = useMemo(() => query.data?.leaderboards ?? [], [query.data?.leaderboards])
+  const activeChallenges = useMemo(
+    () => query.data?.activeChallenges ?? [],
+    [query.data?.activeChallenges],
+  )
+  const activeTrackers = useMemo(
+    () => query.data?.activeTrackers ?? [],
+    [query.data?.activeTrackers],
+  )
   const unlockedCount = useMemo(() => items.filter((a) => a.unlocked).length, [items])
   const lockedCount = items.length - unlockedCount
   const filtered = useMemo(() => {
@@ -253,6 +339,8 @@ export function GameAchievementsPanel({
   }
 
   const ratio = view.totalAchievements > 0 ? view.unlockedAchievements / view.totalAchievements : 0
+  const effectiveSection: SectionMode =
+    leaderboards.length === 0 ? 'achievements' : section
 
   return (
     <div className={s.root}>
@@ -279,6 +367,14 @@ export function GameAchievementsPanel({
                 totalPoints: view.totalPoints,
               })}
             </Caption1>
+            {view.playingLive && view.richPresence && (
+              <div className={s.richPresenceRow} data-testid="ra-rich-presence">
+                <Badge appearance="tint" color="success">
+                  {t('achievements.richPresenceLabel')}
+                </Badge>
+                <Caption1>{view.richPresence}</Caption1>
+              </div>
+            )}
           </div>
         </div>
         {view.totalAchievements > 0 && (
@@ -290,7 +386,100 @@ export function GameAchievementsPanel({
         )}
       </div>
 
-      {items.length === 0 ? (
+      {view.playingLive && (activeChallenges.length > 0 || activeTrackers.length > 0) && (
+        <div className={s.liveStrip} data-testid="ra-live-indicators">
+          {activeChallenges.map((ch) => (
+            <div key={`ch-${ch.id}`} className={s.liveItem}>
+              <div className={s.liveItemMain}>
+                {ch.badgeUrl && (
+                  <img className={s.challengeThumb} src={ch.badgeUrl} alt="" loading="lazy" />
+                )}
+                <Badge appearance="tint" color="warning">
+                  {t('achievements.activeChallengeBadge')}
+                </Badge>
+                <Text weight="semibold">{ch.title}</Text>
+              </div>
+              <Badge appearance="tint" color="subtle">
+                {t('achievements.pointsShort', { points: ch.points })}
+              </Badge>
+            </div>
+          ))}
+          {activeTrackers.map((tr) => (
+            <div key={`tr-${tr.id}`} className={s.liveItem}>
+              <div className={s.liveItemMain}>
+                <Badge appearance="tint" color="brand">
+                  {t('achievements.activeTrackerBadge')}
+                </Badge>
+              </div>
+              <Text className={s.trackerValue}>{tr.display}</Text>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {leaderboards.length > 0 && (
+        <div className={s.sections}>
+          <Button
+            size="small"
+            appearance={effectiveSection === 'achievements' ? 'primary' : 'subtle'}
+            onClick={() => setSection('achievements')}
+          >
+            {t('achievements.sectionAchievements', { count: items.length })}
+          </Button>
+          <Button
+            size="small"
+            appearance={effectiveSection === 'leaderboards' ? 'primary' : 'subtle'}
+            onClick={() => setSection('leaderboards')}
+          >
+            {t('achievements.sectionLeaderboards', { count: leaderboards.length })}
+          </Button>
+        </div>
+      )}
+
+      {effectiveSection === 'leaderboards' ? (
+        leaderboards.length === 0 ? (
+          <Caption1 className={s.dim}>{t('achievements.emptyLeaderboards')}</Caption1>
+        ) : (
+          <div className={s.list} data-testid="ra-leaderboards-list">
+            {leaderboards.map((lb) => {
+              const stateBadge = leaderboardStateMeta(lb.state)
+              return (
+                <div key={lb.id} className={s.row}>
+                  <div className={s.achBody}>
+                    <div className={s.achHeader}>
+                      <Body1>
+                        <Text weight="semibold">{lb.title}</Text>
+                      </Body1>
+                      <div className={s.pills}>
+                        {lb.trackerValue && (
+                          <Badge
+                            appearance={lb.state === 'tracking' ? 'filled' : 'tint'}
+                            color="brand"
+                          >
+                            {lb.trackerValue}
+                          </Badge>
+                        )}
+                        <Badge appearance="tint" color={stateBadge.color}>
+                          {t(stateBadge.key)}
+                        </Badge>
+                        <Badge appearance="outline" color="subtle">
+                          {t(leaderboardFormatKey(lb.format))}
+                        </Badge>
+                        {lb.lowerIsBetter && (
+                          <Badge appearance="outline" color="subtle">
+                            {t('achievements.leaderboardLowerBetter')}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <Caption1 className={s.dim}>{lb.description}</Caption1>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
+      ) : items.length === 0 ? (
         <Caption1 className={s.dim}>{t('achievements.emptySet')}</Caption1>
       ) : (
         <>
@@ -345,6 +534,11 @@ export function GameAchievementsPanel({
                         <Text weight="semibold">{ach.title}</Text>
                       </Body1>
                       <div className={s.pills}>
+                        {!ach.unlocked && ach.measuredProgress && (
+                          <Badge appearance="tint" color="brand">
+                            {ach.measuredProgress}
+                          </Badge>
+                        )}
                         <Badge appearance="tint" color={ach.unlocked ? 'success' : 'subtle'}>
                           {t('achievements.pointsShort', { points: ach.points })}
                         </Badge>

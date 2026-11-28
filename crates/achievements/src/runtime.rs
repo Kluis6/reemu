@@ -7,15 +7,18 @@
 
 use crate::client::{
     is_incompatible_game_id, AchievementClient, AchievementEntry, AchievementEvent, AsyncOutcome,
-    GameSummary, OutboundHttpRequest, RaError,
+    GameSummary, LeaderboardInfo, OutboundHttpRequest, RaError,
 };
 use crate::ffi;
 use crate::memory::LibretroMemory;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 const PROGRESS_MAGIC: &[u8; 8] = b"RCHV0001";
 const PROGRESS_FOOTER_LEN: usize = 12;
+const RICH_PRESENCE_SAMPLE_INTERVAL: Duration = Duration::from_secs(5);
+const RICH_PRESENCE_SAMPLE_FRAMES: u32 = 300;
 
 /// Anexa o estado de contadores/priming do `rcheevos` ao final do save state do core.
 pub fn pack_state_with_progress(mut core_state: Vec<u8>, progress: Option<&[u8]>) -> Vec<u8> {
@@ -80,6 +83,10 @@ pub struct RaLoadedSnapshot {
     pub incompatible_version: bool,
     pub summary: GameSummary,
     pub achievements: Vec<AchievementEntry>,
+    #[serde(default)]
+    pub leaderboards: Vec<LeaderboardInfo>,
+    #[serde(default)]
+    pub rich_presence: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -109,6 +116,9 @@ pub struct LiveRuntime {
     has_valid_memory: bool,
     hardcore: bool,
     unofficial: bool,
+    last_rich_presence: Option<String>,
+    last_rp_sample: Option<Instant>,
+    rp_frames_since_sample: u32,
 }
 
 impl LiveRuntime {
@@ -136,6 +146,9 @@ impl LiveRuntime {
             has_valid_memory,
             hardcore: cfg.hardcore,
             unofficial: cfg.unofficial,
+            last_rich_presence: None,
+            last_rp_sample: None,
+            rp_frames_since_sample: 0,
         };
         let drain = rt.collect_drain();
         Ok((rt, drain))
@@ -181,9 +194,17 @@ impl LiveRuntime {
             has_valid_memory: true,
             hardcore: cfg.hardcore,
             unofficial: cfg.unofficial,
+            last_rich_presence: None,
+            last_rp_sample: None,
+            rp_frames_since_sample: 0,
         };
         let drain = rt.collect_drain();
         Ok((rt, drain))
+    }
+
+    #[cfg(test)]
+    fn write_test_memory(&mut self, offset: usize, bytes: &[u8]) {
+        self.client.write_test_memory(offset, bytes);
     }
 
     pub fn on_http_response(
@@ -200,7 +221,10 @@ impl LiveRuntime {
     pub fn do_frame(&mut self) -> RuntimeDrain {
         if matches!(self.phase, Phase::Active) {
             self.client.do_frame();
-            self.collect_drain()
+            self.rp_frames_since_sample = self.rp_frames_since_sample.saturating_add(1);
+            let mut drain = self.collect_drain();
+            self.maybe_sample_rich_presence(&mut drain.events);
+            drain
         } else {
             RuntimeDrain::default()
         }
@@ -209,9 +233,38 @@ impl LiveRuntime {
     pub fn idle(&mut self) -> RuntimeDrain {
         if !matches!(self.phase, Phase::Inactive) {
             self.client.idle();
-            self.collect_drain()
+            let mut drain = self.collect_drain();
+            if matches!(self.phase, Phase::Active) {
+                self.maybe_sample_rich_presence(&mut drain.events);
+            }
+            drain
         } else {
             RuntimeDrain::default()
+        }
+    }
+
+    fn current_rich_presence(&self) -> Option<String> {
+        if self.client.has_rich_presence() {
+            self.client.rich_presence()
+        } else {
+            None
+        }
+    }
+
+    fn maybe_sample_rich_presence(&mut self, events: &mut Vec<AchievementEvent>) {
+        let due_by_time = self
+            .last_rp_sample
+            .is_none_or(|t| t.elapsed() >= RICH_PRESENCE_SAMPLE_INTERVAL);
+        let due_by_frames = self.rp_frames_since_sample >= RICH_PRESENCE_SAMPLE_FRAMES;
+        if !due_by_time && !due_by_frames {
+            return;
+        }
+        self.last_rp_sample = Some(Instant::now());
+        self.rp_frames_since_sample = 0;
+        let next = self.current_rich_presence();
+        if next != self.last_rich_presence {
+            self.last_rich_presence = next.clone();
+            events.push(AchievementEvent::RichPresenceChanged(next));
         }
     }
 
@@ -273,6 +326,11 @@ impl LiveRuntime {
                     let effective_hardcore =
                         self.hardcore && !hardcore_downgraded && !incompatible_version;
                     self.hardcore = effective_hardcore;
+                    // Os memrefs do Rich Presence so sao populados no 1o `do_frame`,
+                    // entao agendamos a 1a amostragem para logo apos o 1o quadro ativo.
+                    self.last_rich_presence = None;
+                    self.last_rp_sample = None;
+                    self.rp_frames_since_sample = RICH_PRESENCE_SAMPLE_FRAMES;
                     drain.loaded = Some(RaLoadedSnapshot {
                         game_id: game.id,
                         title: game.title,
@@ -282,6 +340,12 @@ impl LiveRuntime {
                         incompatible_version,
                         summary: game.summary,
                         achievements: self.client.achievements(self.unofficial),
+                        leaderboards: if incompatible_version {
+                            Vec::new()
+                        } else {
+                            self.client.leaderboards()
+                        },
+                        rich_presence: None,
                     });
                 }
                 AsyncOutcome::GameLoad(Err(RaError::Api { code, .. }))
@@ -303,6 +367,7 @@ impl LiveRuntime {
             if matches!(ev, AchievementEvent::ResetRequested) {
                 drain.reset_core = true;
                 self.client.reset();
+                self.rp_frames_since_sample = RICH_PRESENCE_SAMPLE_FRAMES;
             }
             drain.events.push(ev);
         }
@@ -383,5 +448,73 @@ mod tests {
         assert_eq!(core_bytes, &[9, 8, 7]);
         assert!(prog.is_some());
         rt.restore_progress(prog);
+    }
+
+    #[test]
+    fn live_runtime_samples_and_emits_rich_presence_changes() {
+        let cfg = RaSessionConfig {
+            console_id: crate::console::RC_CONSOLE_SUPER_NINTENDO,
+            rom_path: "dummy.sfc".into(),
+            rom_hash: Some("0123456789abcdef0123456789abcdef".into()),
+            username: "edward".into(),
+            token: "tok_123".into(),
+            hardcore: true,
+            unofficial: false,
+            encore: false,
+        };
+        let mut init_mem = vec![0u8; 4096];
+        init_mem[0x0040] = 1;
+        init_mem[0x0041] = 5;
+        let (mut rt, mut drain) = LiveRuntime::start_with_test_memory(cfg, init_mem).unwrap();
+
+        while !drain.http_requests.is_empty() {
+            let batch = std::mem::take(&mut drain.http_requests);
+            for req in batch {
+                let body = req.post_data.as_deref().unwrap_or(&req.url);
+                let reply: &[u8] = if body.contains("r=login2") {
+                    br#"{"Success":true,"User":"edward","Token":"tok_123","Score":100,"SoftcoreScore":50,"Messages":0}"#
+                } else if body.contains("r=gameid") {
+                    br#"{"Success":true,"GameID":999}"#
+                } else if body.contains("r=achievementsets") {
+                    br#"{"Success":true,"GameId":999,"Title":"RP Runtime Test","ConsoleId":3,"ImageIconUrl":"https://media.retroachievements.org/Images/001234.png","RichPresenceGameId":999,"RichPresencePatch":"Format:Rings\nFormatType=VALUE\n\nLookup:Zone\n1=Green Hill\n2=Marble Zone\n\nDisplay:\n@Zone(0xH0040) | @Rings(0xH0041) rings","Sets":[{"AchievementSetId":1111,"GameId":999,"Title":null,"Type":"core","ImageIconUrl":"https://media.retroachievements.org/Images/001234.png","Achievements":[],"Leaderboards":[]}]}"#
+                } else if body.contains("r=startsession") {
+                    br#"{"Success":true,"HardcoreUnlocks":[],"Unlocks":[],"ServerNow":1700000100}"#
+                } else {
+                    br#"{"Success":true}"#
+                };
+                let step = rt.on_http_response(req.id, 200, reply);
+                if step.loaded.is_some() {
+                    drain.loaded = step.loaded;
+                }
+                drain.events.extend(step.events);
+                drain.http_requests.extend(step.http_requests);
+            }
+        }
+
+        let loaded = drain.loaded.expect("game loaded");
+        assert_eq!(loaded.game_id, 999);
+
+        // No 1o `do_frame`, os memrefs sao lidos e o Rich Presence inicial e emitido.
+        let first_frame = rt.do_frame();
+        assert_eq!(
+            first_frame.events,
+            vec![AchievementEvent::RichPresenceChanged(Some(
+                "Green Hill | 5 rings".into()
+            ))]
+        );
+
+        // Muda a RAM para Zona 2 com 42 aneis e roda 300 quadros (~5s a 60fps).
+        rt.write_test_memory(0x0040, &[2, 42]);
+        let mut rp_events = Vec::new();
+        for _ in 0..RICH_PRESENCE_SAMPLE_FRAMES {
+            let step = rt.do_frame();
+            rp_events.extend(step.events);
+        }
+        assert_eq!(
+            rp_events,
+            vec![AchievementEvent::RichPresenceChanged(Some(
+                "Marble Zone | 42 rings".into()
+            ))]
+        );
     }
 }

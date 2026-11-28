@@ -70,7 +70,7 @@ pub fn run() {
         default_hook(info);
     }));
 
-    let app = covers::register(tauri::Builder::default())
+    let app = ra::register(covers::register(tauri::Builder::default()))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
