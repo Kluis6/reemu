@@ -97,7 +97,11 @@ fn scan_bios(
             by_hash.entry(hash).or_default().push(dir.join(name));
         }
         if entry.any_of.is_empty() {
-            known_names.insert(entry.filename.to_ascii_lowercase());
+            let leaf = Path::new(entry.filename)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(entry.filename);
+            known_names.insert(leaf.to_ascii_lowercase());
             for hash in entry.md5 {
                 by_hash
                     .entry(hash)

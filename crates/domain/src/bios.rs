@@ -282,6 +282,42 @@ const PC_FX: &[BiosFile] = &[BiosFile {
     any_of: &[],
 }];
 
+const GAMECUBE: &[BiosFile] = &[
+    BiosFile {
+        filename: "USA/IPL.bin",
+        subfolder: Some("dolphin-emu/Sys/GC"),
+        md5: &[
+            "b17148254a5799684c7d783206504926",
+            "fc924a7c879b661abc37cec4f018fdf3",
+        ],
+        required: false,
+        note: "IPL NTSC-U (EUA) - opcional; util para fontes do sistema e abertura do GameCube",
+        any_of: &[],
+    },
+    BiosFile {
+        filename: "EUR/IPL.bin",
+        subfolder: Some("dolphin-emu/Sys/GC"),
+        md5: &[
+            "db92574caab77a7ec99d4605fd6f2450",
+            "339848a0b7c2124cf155276c1e79cbd0",
+        ],
+        required: false,
+        note: "IPL PAL (Europa) - opcional; util para fontes do sistema e abertura do GameCube",
+        any_of: &[],
+    },
+    BiosFile {
+        filename: "JAP/IPL.bin",
+        subfolder: Some("dolphin-emu/Sys/GC"),
+        md5: &[
+            "b17148254a5799684c7d783206504926",
+            "fc924a7c879b661abc37cec4f018fdf3",
+        ],
+        required: false,
+        note: "IPL NTSC-J (Japao) - opcional; util para fontes do sistema e abertura do GameCube",
+        any_of: &[],
+    },
+];
+
 const AMIGA: &[BiosFile] = &[
     BiosFile {
         filename: "kick34005.A500",
@@ -593,6 +629,7 @@ fn handwritten(system_id: &str) -> &'static [BiosFile] {
         "atari8bit" => ATARI_8BIT,
         "msx" => MSX,
         "nds" => NDS,
+        "gamecube" => GAMECUBE,
         _ => &[],
     }
 }
@@ -616,6 +653,7 @@ const HANDWRITTEN_SYSTEMS: &[&str] = &[
     "msx",
     "nds",
     "snes",
+    "gamecube",
 ];
 
 #[cfg(test)]

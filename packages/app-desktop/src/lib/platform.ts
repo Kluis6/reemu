@@ -8,6 +8,7 @@ const LABELS: Record<string, string> = {
   nes: "Nintendo (NES)",
   snes: "Super Nintendo",
   n64: "Nintendo 64",
+  gamecube: "GameCube",
   gb: "Game Boy",
   gbc: "Game Boy Color",
   gba: "Game Boy Advance",

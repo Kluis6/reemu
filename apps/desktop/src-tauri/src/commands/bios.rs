@@ -243,3 +243,17 @@ pub async fn download_ppsspp_assets(state: State<'_, AppState>) -> Result<usize,
         .await
         .map_err(AppError::from)
 }
+
+/// Pasta `dolphin-emu/Sys/` instalada em `<system_dir>/`?
+#[tauri::command]
+pub fn dolphin_assets_installed(state: State<'_, AppState>) -> bool {
+    crate::system_files::dolphin_installed(&state.system_dir)
+}
+
+/// Baixa os dados `dolphin-emu/Sys/` do buildbot oficial da libretro.
+#[tauri::command]
+pub async fn download_dolphin_assets(state: State<'_, AppState>) -> Result<usize, AppError> {
+    crate::system_files::download_dolphin(&state.system_dir)
+        .await
+        .map_err(AppError::from)
+}

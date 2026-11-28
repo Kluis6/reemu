@@ -350,6 +350,10 @@ export const removeBiosFile = (systemId: string, filename: string) =>
 export const ppssppAssetsInstalled = () => invoke<boolean>('ppsspp_assets_installed')
 /** Baixa os assets do PPSSPP (GPL, buildbot da libretro). Devolve nº de arquivos. */
 export const downloadPpssppAssets = () => invoke<number>('download_ppsspp_assets')
+/** Pasta `dolphin-emu/Sys/` instalada na pasta de sistema? */
+export const dolphinAssetsInstalled = () => invoke<boolean>('dolphin_assets_installed')
+/** Baixa os dados `dolphin-emu/Sys/` do buildbot da libretro. Devolve nº de arquivos. */
+export const downloadDolphinAssets = () => invoke<number>('download_dolphin_assets')
 
 /** Diálogo nativo de seleção de um arquivo de BIOS (sem filtro de extensão —
  *  vem em `.bin`/`.zip`/etc conforme o sistema). */

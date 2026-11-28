@@ -59,7 +59,16 @@ impl From<RomHashes> for Identity {
 /// inteiros (NFR-5). O `.iso` não está aqui: segue o [`DISC_HASH_MAX`] como
 /// as outras imagens, porque o de tamanho de CD o ScreenScraper conhece pelo
 /// hash.
-const SERIAL_ONLY_EXTS: &[&str] = &["cso", "chd", "ogv", "dirksimple"];
+const SERIAL_ONLY_EXTS: &[&str] = &[
+    "cso",
+    "chd",
+    "ogv",
+    "dirksimple",
+    "rvz",
+    "wia",
+    "gcz",
+    "wbfs",
+];
 
 /// Maior arquivo lido inteiro pro hash (um `.iso`, a trilha de um
 /// `.cue`/`.gdi`, um `.img`, `.pbp`, `.cdi`, `.mdf`, `.nrg` solto, e também

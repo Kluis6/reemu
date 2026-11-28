@@ -1,9 +1,10 @@
 # 25 — Suporte ao core Dolphin
 
-**Estado** — Backlog desde 2026-11-18. O objetivo é abrir jogos de GameCube
-e Wii pelo fluxo normal do ReEmu com o core `dolphin_libretro`. A primeira
-entrega valida GameCube com controle convencional e OpenGL. Wii entra em
-uma etapa seguinte com controles emulados. Vulkan tem validação própria.
+**Estado:** GameCube inicial integrado (2026-11-26: `dolphin_libretro`
+`2609.0.159+a91b1d311d` validado no Windows x64 com OpenGL Core e pacote
+`Dolphin.zip` em `dolphin-emu/Sys`; formatos `.gcm`, `.iso`, `.rvz`, `.wia`,
+`.gcz` e `.tgc` com leitor de cabecalho e serial em 216 bytes). Wii entra em
+uma etapa seguinte com controles emulados. Vulkan tem validacao propria.
 D3D11 depende do [projeto de Direct3D por core](24-direct3d-por-core.md).
 
 ## Base confirmada
@@ -30,30 +31,33 @@ D3D11 depende do [projeto de Direct3D por core](24-direct3d-por-core.md).
 
 ### A — Escolher o binário e validar a base
 
-- [ ] Registrar a origem, versão e arquitetura do core Windows x64 e
-      conferir a disponibilidade para Linux x64. Escolher um conjunto
-      `Sys` compatível com a revisão do core, conferir origem e licença e
-      validar instalação e detecção em um diretório limpo.
+- [x] Registrar a origem, versão e arquitetura do core Windows x64 e
+      conferir a disponibilidade para Linux x64 (`buildbot.libretro.com`,
+      `dolphin_libretro` `2609.0.159+a91b1d311d` em Windows e Linux x64;
+      pacote `assets/system/Dolphin.zip` instalado em `dolphin-emu/Sys` com
+      verificacao de `Sys/codehandler.bin` e preservacao de `IPL.bin`
+      opcional).
 - [ ] Rodar um teste manual do core no processo filho com OpenGL. Confirmar
       negociação de contexto, caminho do conteúdo, vídeo, áudio, diretórios
       de sistema e saves e encerramento limpo. Registrar GPU, driver e DLL
-      ou SO usado. Validar o caminho Windows/WGL e Linux/EGL separadamente
-      antes de anunciar suporte em cada plataforma. [OpenGL no Dolphin](https://docs.libretro.com/library/dolphin/#opengl)
+      ou SO usado (`reemu-core-host --probe` validado no Windows x64; falta
+      validacao separada Linux/EGL). [OpenGL no Dolphin](https://docs.libretro.com/library/dolphin/#opengl)
 
 ### B — Entrega inicial de GameCube
 
-- [ ] Adicionar `dolphin_libretro` ao catálogo e associar o sistema
+- [x] Adicionar `dolphin_libretro` ao catálogo e associar o sistema
       `gamecube` ao core. Integrar nome, filtro e arte da plataforma no
       frontend. Incluir detecção de `Sys`, instalação por versão com
       validação do conteúdo e mensagem de recuperação. Tratar IPL como
       arquivo opcional importado pelo usuário.
-- [ ] Começar com `.gcm`, `.iso` e `.rvz` quando confirmados no binário
-      escolhido. Classificar ISO com a evidência do disco e da pasta,
-      preservando a seleção manual quando o sistema for ambíguo. RVZ
-      comporta GameCube e Wii. Validar a identificação pelo formato e
-      usar pasta ou seleção manual até ter um leitor confiável.
-      Evitar carregar imagens grandes inteiras na memória e testar regressões
-      nas associações de ISO existentes.
+- [x] Começar com `.gcm`, `.iso` e `.rvz` quando confirmados no binário
+      escolhido. Classificar ISO com a evidência do disco (`0xC2339F3D` em
+      `0x1C` sem magia de Wii em `0x18`) e da pasta, preservando a seleção
+      manual quando o sistema for ambíguo. RVZ e WIA comportam GameCube e Wii
+      (`disc_type == 1` em `0x48` + `dhead` em `0x58..0xD8`, sem reivindicar
+      `disc_type == 2`). Evitar carregar imagens grandes inteiras na memória
+      (`SERIAL_ONLY_EXTS` + leitura de 216 bytes) e testar regressões nas
+      associações de ISO existentes.
       [Formatos do core](https://github.com/libretro/libretro-super/blob/master/dist/info/dolphin_libretro.info) · [Especificação do RVZ](https://github.com/dolphin-emu/dolphin/blob/master/docs/WiaAndRvz.md)
 - [ ] Validar controle GameCube com RetroPad. Conferir botão A/B/X/Y,
       C-stick, gatilhos e mapeamento das portas. Testar cartão de memória
