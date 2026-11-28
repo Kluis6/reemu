@@ -256,10 +256,13 @@ async fn set_shader_inner(
         shader_scope_args(&pool, &scope, system_id.as_deref(), rom_id.as_deref()).await?;
     let sc = db::ShaderChainRepo::new(pool);
     if clearing {
-        return sc
-            .clear_assignment(sc_scope, sys.as_deref(), rid.as_deref())
+        sc.clear_assignment(sc_scope, sys.as_deref(), rid.as_deref())
             .await
-            .map_err(AppError::from);
+            .map_err(AppError::from)?;
+        if matches!(state.session.state(), SessionState::Idle) {
+            apply_scope_shader_ex(state, sys.as_deref(), rid.as_deref(), false).await;
+        }
+        return Ok(());
     }
     let (id, pname, is_builtin) = preset_id_of(name);
     // heurística: presets com "bezel" no nome já desenham a moldura → o
@@ -377,15 +380,57 @@ pub struct ShaderParamDto {
     pub step: f32,
 }
 
-/// Parâmetros do shader carregado agora no processador GPU. Vazio pros builtins
-/// (`plain`/`crt`/`lcd`) e quando não há GPU.
+/// Shaders atribuídos ao padrão geral (`default`) e a cada plataforma (`system`).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "ShaderAssignments"))]
+pub struct ShaderAssignments {
+    pub at_default: Option<String>,
+    pub systems: std::collections::BTreeMap<String, String>,
+}
+
 #[tauri::command]
-pub fn get_shader_params(state: State<'_, AppState>) -> Vec<ShaderParamDto> {
+pub async fn get_shader_assignments(
+    state: State<'_, AppState>,
+) -> Result<ShaderAssignments, AppError> {
+    let pool = pool(&state)?;
+    let (at_default, sys_list) = db::ShaderChainRepo::new(pool)
+        .global_and_system_sources()
+        .await
+        .map_err(AppError::from)?;
+    Ok(ShaderAssignments {
+        at_default,
+        systems: sys_list.into_iter().collect(),
+    })
+}
+
+/// Parâmetros do shader carregado agora no processador GPU. Se `scope` for
+/// informado com a sessão ociosa, sincroniza antes o processador com o shader
+/// e os parâmetros salvos daquele escopo (`default`, `system` ou `rom`).
+#[tauri::command]
+pub async fn get_shader_params(
+    state: State<'_, AppState>,
+    scope: Option<String>,
+    system_id: Option<String>,
+    rom_id: Option<String>,
+) -> Result<Vec<ShaderParamDto>, AppError> {
+    if let Some(sc) = scope.as_deref() {
+        if matches!(state.session.state(), SessionState::Idle) {
+            if let Ok(pool) = pool(&state) {
+                if let Ok((_, sys, rid)) =
+                    shader_scope_args(&pool, sc, system_id.as_deref(), rom_id.as_deref()).await
+                {
+                    apply_scope_shader_ex(&state, sys.as_deref(), rid.as_deref(), false).await;
+                }
+            }
+        }
+    }
     let guard = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
     let Some(fp) = guard.as_ref() else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
-    fp.shader_param_meta()
+    Ok(fp
+        .shader_param_meta()
         .iter()
         .map(|m| ShaderParamDto {
             value: fp.shader_param_value(&m.name).unwrap_or(m.default),
@@ -396,11 +441,11 @@ pub fn get_shader_params(state: State<'_, AppState>) -> Vec<ShaderParamDto> {
             max: m.max,
             step: m.step,
         })
-        .collect()
+        .collect())
 }
 
 /// Ajusta um parâmetro do shader agora e, se `scope` for dado, persiste
-/// (`"default"` ou `"rom"` + `rom_id`). O escopo precisa já ter um shader
+/// (`"default"`, `"system"` ou `"rom"`). O escopo precisa já ter um shader
 /// atribuído (a UI garante isso antes de mostrar os controles).
 #[tauri::command]
 pub async fn set_shader_param(
@@ -442,15 +487,73 @@ pub async fn reset_shader_params(
     system_id: Option<String>,
     rom_id: Option<String>,
 ) -> Result<(), AppError> {
+    let mut resolved_sys = system_id;
     if let Some(scope) = &scope {
         let pool = pool(&state)?;
         let (sc_scope, sys, rid) =
-            shader_scope_args(&pool, scope, system_id.as_deref(), rom_id.as_deref()).await?;
+            shader_scope_args(&pool, scope, resolved_sys.as_deref(), rom_id.as_deref()).await?;
+        resolved_sys = sys.clone();
         db::ShaderChainRepo::new(pool)
             .clear_parameter_overrides(sc_scope, sys.as_deref(), rid.as_deref())
             .await
             .map_err(AppError::from)?;
     }
-    apply_resolved_shader_ex(&state, rom_id.as_deref(), true).await;
+    apply_scope_shader_ex(&state, resolved_sys.as_deref(), rom_id.as_deref(), true).await;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use domain::shader_chain::{AssignmentScope, ShaderChainStore, ShaderFormat, ShaderPreset};
+
+    #[tokio::test]
+    async fn global_and_system_shader_sources_roundtrip() {
+        let pool = db::connect_in_memory().await.unwrap();
+        super::seed_builtin_shader_presets(&pool).await;
+        let sc = db::ShaderChainRepo::new(pool);
+
+        assert_eq!(
+            sc.global_and_system_sources().await.unwrap(),
+            (None, vec![])
+        );
+
+        sc.set_assignment(AssignmentScope::Default, None, None, "crt")
+            .await
+            .unwrap();
+        sc.set_assignment(AssignmentScope::System, Some("gba"), None, "lcd")
+            .await
+            .unwrap();
+        sc.upsert_preset(&ShaderPreset {
+            id: "curated:xbr".into(),
+            name: "xBR".into(),
+            source_path: "curated:xbr".into(),
+            format: ShaderFormat::Slang,
+            is_builtin: true,
+            includes_bezel: false,
+        })
+        .await
+        .unwrap();
+        sc.set_assignment(AssignmentScope::System, Some("snes"), None, "curated:xbr")
+            .await
+            .unwrap();
+
+        let (def, systems) = sc.global_and_system_sources().await.unwrap();
+        assert_eq!(def.as_deref(), Some("crt"));
+        assert_eq!(
+            systems,
+            vec![
+                ("gba".to_string(), "lcd".to_string()),
+                ("snes".to_string(), "curated:xbr".to_string()),
+            ]
+        );
+
+        sc.clear_assignment(AssignmentScope::System, Some("gba"), None)
+            .await
+            .unwrap();
+        let (_, systems) = sc.global_and_system_sources().await.unwrap();
+        assert_eq!(
+            systems,
+            vec![("snes".to_string(), "curated:xbr".to_string())]
+        );
+    }
 }

@@ -54,7 +54,7 @@ export function ShaderParams({
   const push = useToastStore((st) => st.push)
   const q = useQuery({
     queryKey: ['shader-params', scope, romId ?? null, systemId ?? null, reloadKey ?? null],
-    queryFn: getShaderParams,
+    queryFn: () => getShaderParams(scope, romId, systemId),
     retry: false,
   })
 

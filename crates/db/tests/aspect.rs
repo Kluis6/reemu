@@ -43,4 +43,19 @@ async fn cascade_and_clear() {
         repo.get(Some("r1"), "snes").await.unwrap().resolved(),
         "fill"
     );
+
+    assert_eq!(repo.get_default().await.unwrap().as_deref(), Some("4:3"));
+    repo.set("system", "gba", Some("core")).await.unwrap();
+    assert_eq!(
+        repo.list_systems().await.unwrap(),
+        vec![
+            ("gba".to_string(), "core".to_string()),
+            ("snes".to_string(), "fill".to_string()),
+        ]
+    );
+    repo.set("system", "snes", None).await.unwrap();
+    assert_eq!(
+        repo.list_systems().await.unwrap(),
+        vec![("gba".to_string(), "core".to_string())]
+    );
 }

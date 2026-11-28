@@ -19,6 +19,38 @@ impl ShaderChainRepo {
         Self { db }
     }
 
+    /// Shader atribuído ao padrão geral (`default`) e a cada plataforma
+    /// (`system_id` -> `source_path`), para a tela de Configurações.
+    pub async fn global_and_system_sources(
+        &self,
+    ) -> Result<(Option<String>, Vec<(String, String)>), RepoError> {
+        let rows = sqlx::query(
+            "SELECT a.scope, a.system_id, p.source_path \
+             FROM shader_chain_assignments a \
+             JOIN shader_presets p ON p.id = a.preset_id \
+             WHERE a.scope IN ('default', 'system') \
+             ORDER BY a.system_id",
+        )
+        .fetch_all(&self.db)
+        .await
+        .map_err(be)?;
+
+        let mut at_default = None;
+        let mut systems = Vec::new();
+        for r in &rows {
+            let scope: String = r.try_get("scope").map_err(be)?;
+            let source_path: String = r.try_get("source_path").map_err(be)?;
+            if scope == "default" {
+                at_default = Some(source_path);
+            } else if let Some(sys) = r.try_get::<Option<String>, _>("system_id").map_err(be)? {
+                if !sys.is_empty() {
+                    systems.push((sys, source_path));
+                }
+            }
+        }
+        Ok((at_default, systems))
+    }
+
     async fn overrides_for(
         &self,
         assignment_id: &str,

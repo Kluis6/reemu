@@ -191,7 +191,16 @@ export function SettingsLayout() {
         label: t("settings.tabs.video"),
         to: detail ? "/settings/aparencia/decoracoes" : undefined,
       });
-      if (detail) crumbs.push({ label: shadersPage ? t("video.tabShaders") : t("video.tabBezels") });
+      if (detail) {
+        crumbs.push({
+          label:
+            detail === "proporcao"
+              ? t("video.tabAspect")
+              : shadersPage
+                ? t("video.tabShaders")
+                : t("video.tabBezels"),
+        });
+      }
     } else if (section.key === "aparencia" && sub === "protecao-de-tela") {
       crumbs.push({ label, to: "/settings/aparencia" }, { label: t("appearance.screensaver.title") });
     } else if (section.key === "aparencia" && (sub === "temas" || sub === "papel-de-parede")) {
