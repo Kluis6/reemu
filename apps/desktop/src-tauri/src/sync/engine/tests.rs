@@ -2976,6 +2976,7 @@ fn save_file(platform: &'static str, core: Option<&'static str>, filename: &str)
         key: format!("file:{platform}/{filename}"),
         rom_id: None,
         rom_crc32: None,
+        game_uuid: None,
         platform,
         core,
         filename: filename.into(),
@@ -6036,4 +6037,395 @@ async fn sync_pass_unlocks_retroachievements_locally_and_pushes_updates() {
     r.engine.push_credentials_now(&r.alva).await.unwrap();
     let sync_meta = crate::credentials::load_sync_meta(&r.db).await.unwrap();
     assert!(!sync_meta.thegamesdb.dirty);
+}
+
+fn row_with_identity(
+    save_id: &str,
+    filename: &str,
+    platform: &str,
+    bytes: &[u8],
+    version: &str,
+    writer: Option<&str>,
+    game_uuid: Option<&str>,
+    slug: Option<&str>,
+) -> Value {
+    let mut r = row(save_id, filename, platform, None, bytes, version, writer);
+    r["game_uuid"] = match game_uuid {
+        Some(u) => json!(u),
+        None => Value::Null,
+    };
+    r["slug"] = match slug {
+        Some(s) => json!(s),
+        None => Value::Null,
+    };
+    r
+}
+
+async fn add_rom_full(
+    r: &Rig,
+    id: &str,
+    file: &str,
+    system: &str,
+    crc32: &str,
+    game_uuid: Option<&str>,
+) {
+    r.roms
+        .add(&Rom {
+            id: id.into(),
+            file_path: format!("C:/roms/{file}"),
+            crc32: crc32.into(),
+            md5: "MD5".into(),
+            system_id: system.into(),
+            added_at: 0,
+            last_played_at: None,
+            is_favorite: false,
+            user_title: None,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    if let Some(uid) = game_uuid {
+        db::RomResolutionRepo::new(r.db.clone())
+            .put(&domain::metadata::RomResolution {
+                rom_id: id.into(),
+                state: domain::metadata::ResolutionState::Found,
+                game_uuid: Some(uid.into()),
+                matched_by: Some("crc32".into()),
+                reason: None,
+                retry_after: None,
+                media_pending: false,
+                answer_json: None,
+                resolved_at: 1_700_000_000,
+            })
+            .await
+            .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn pc_a_uploads_metadata_and_pc_b_matches_different_rom_filename_end_to_end() {
+    let _serial = SERIAL.lock().await;
+    const CT_UUID: &str = "550e8400-e29b-41d4-a716-446655440000";
+    const SM_UUID: &str = "11111111-2222-3333-4444-555555555555";
+    const FF_UUID: &str = "deadbeef-dead-beef-dead-beefdeadbeef";
+
+    // PC A: sobe "Chrono Trigger (USA).srm" com game_uuid e slug crc32.
+    let pca = rig("cross-pca").await;
+    add_rom_full(
+        &pca,
+        "ct_a",
+        "Chrono Trigger (USA).sfc",
+        "snes",
+        "2D206BF7",
+        Some(CT_UUID),
+    )
+    .await;
+    pca.write("saves/Chrono Trigger (USA).srm", b"ct-pca-v1");
+    mount_devices(&pca.server, vec![device("dev1", "Sala")]).await;
+    mount_files(&pca.server, vec![]).await;
+    mount_upload(&pca.server, "s_ct", "v1").await;
+
+    let up_report = pca.pass().await.unwrap();
+    assert_eq!((up_report.uploaded, up_report.downloaded), (1, 0));
+    let pca_posts = pca.reqs("POST", SAVES).await;
+    assert_eq!(pca_posts.len(), 1);
+    let pca_body = &pca_posts[0].body;
+    assert_eq!(
+        field(pca_body, "filename").as_deref(),
+        Some("Chrono Trigger (USA).srm")
+    );
+    assert_eq!(field(pca_body, "game_uuid").as_deref(), Some(CT_UUID));
+    assert_eq!(field(pca_body, "slug").as_deref(), Some("crc32:2d206bf7"));
+
+    // PC B: tem "Chrono_Trigger_US.sfc" (outro nome e outra revisao CRC, mesmo game_uuid)
+    // e outra ROM nao relacionada ("Super_Metroid_US.sfc").
+    let pcb = rig("cross-pcb").await;
+    add_rom_full(
+        &pcb,
+        "ct_b",
+        "Chrono_Trigger_US.sfc",
+        "snes",
+        "99999999",
+        Some(CT_UUID),
+    )
+    .await;
+    add_rom_full(
+        &pcb,
+        "sm_b",
+        "Super_Metroid_US.sfc",
+        "snes",
+        "AABBCCDD",
+        Some(SM_UUID),
+    )
+    .await;
+    mount_devices(
+        &pcb.server,
+        vec![device("dev1", "Sala"), device("dev2", "Notebook")],
+    )
+    .await;
+    let listing = mount_listing(
+        &pcb.server,
+        vec![
+            row_with_identity(
+                "s_ct",
+                "Chrono Trigger (USA).srm",
+                "snes",
+                b"ct-pca-v1",
+                "v1",
+                Some("dev2"),
+                Some(CT_UUID),
+                Some("crc32:2d206bf7"),
+            ),
+            row_with_identity(
+                "s_ff",
+                "Final Fantasy VI (USA).srm",
+                "snes",
+                b"ff-save",
+                "v1",
+                Some("dev2"),
+                Some(FF_UUID),
+                Some("crc32:fedcba98"),
+            ),
+        ],
+    )
+    .await;
+    mount_content(&pcb.server, "s_ct", "v1", b"ct-pca-v1").await;
+    mount_content(&pcb.server, "s_ff", "v1", b"ff-save").await;
+    mount_upload(&pcb.server, "s_ct", "v2").await;
+
+    let dl_report = pcb.pass().await.unwrap();
+    assert_eq!((dl_report.uploaded, dl_report.downloaded), (0, 1));
+    assert_eq!(
+        pcb.read("saves/Chrono_Trigger_US.srm").unwrap(),
+        b"ct-pca-v1"
+    );
+    assert!(pcb.read("saves/Chrono Trigger (USA).srm").is_none());
+    assert!(pcb.read("saves/Super_Metroid_US.srm").is_none());
+    assert!(pcb.read("saves/Final Fantasy VI (USA).srm").is_none());
+
+    let base = pcb
+        .base_of("file:snes/Chrono_Trigger_US.srm")
+        .await
+        .unwrap();
+    assert_eq!(
+        (
+            base.remote_save_id.as_str(),
+            base.remote_version_id.as_str()
+        ),
+        ("s_ct", "v1")
+    );
+    let line = pcb.engine.save_status("ct_b").await.unwrap();
+    assert_eq!(line.state, SaveLineState::Synced);
+    assert_eq!(line.versions, 3);
+
+    // PC B joga e fecha: after_close (PassScope::Rom) atualiza a MESMA linha s_ct
+    // usando o filename da nuvem ("Chrono Trigger (USA).srm"), sem duplicar linha.
+    pcb.write("saves/Chrono_Trigger_US.srm", b"ct-pcb-v2");
+    let (saves_res, _) = pcb.engine.after_close(&pcb.alva, "ct_b").await;
+    let close_report = saves_res.unwrap();
+    assert_eq!((close_report.uploaded, close_report.downloaded), (1, 0));
+
+    let pcb_posts = pcb.reqs("POST", SAVES).await;
+    assert_eq!(pcb_posts.len(), 1);
+    let pcb_body = &pcb_posts[0].body;
+    assert_eq!(
+        field(pcb_body, "filename").as_deref(),
+        Some("Chrono Trigger (USA).srm")
+    );
+    assert_eq!(field(pcb_body, "file").as_deref(), Some("ct-pcb-v2"));
+    // Ja tinha game_uuid e slug na linha remota: nao sobrescreve.
+    assert_eq!(field(pcb_body, "game_uuid"), None);
+    assert_eq!(field(pcb_body, "slug"), None);
+
+    let updated_base = pcb
+        .base_of("file:snes/Chrono_Trigger_US.srm")
+        .await
+        .unwrap();
+    assert_eq!(
+        (
+            updated_base.remote_save_id.as_str(),
+            updated_base.remote_version_id.as_str()
+        ),
+        ("s_ct", "v2")
+    );
+    let _ = listing;
+}
+
+#[tokio::test]
+async fn prelaunch_resolve_and_restore_work_across_different_rom_filenames_by_crc32() {
+    let _serial = SERIAL.lock().await;
+    let pcb = rig("cross-crc-prelaunch").await;
+    // Sem game_uuid local: casa exclusivamente pelo CRC32 de 8 hex.
+    add_rom_full(
+        &pcb,
+        "ct_b",
+        "Chrono_Trigger_US.sfc",
+        "snes",
+        "2D206BF7",
+        None,
+    )
+    .await;
+    mount_devices(
+        &pcb.server,
+        vec![device("dev1", "Sala"), device("dev2", "Notebook")],
+    )
+    .await;
+    let listing = mount_listing(
+        &pcb.server,
+        vec![row_with_identity(
+            "s_ct",
+            "Chrono Trigger (USA).srm",
+            "snes",
+            b"from-pca-v1",
+            "v1",
+            Some("dev2"),
+            None,
+            Some("crc32:2d206bf7"),
+        )],
+    )
+    .await;
+    mount_content(&pcb.server, "s_ct", "v1", b"from-pca-v1").await;
+    mount_content(&pcb.server, "s_ct", "v2", b"from-pca-v2").await;
+    mount_upload(&pcb.server, "s_ct", "v3").await;
+
+    pcb.set_playing(Playing::Loading);
+    assert_eq!(
+        pcb.engine.prelaunch(&pcb.alva, "ct_b").await,
+        PrelaunchOutcome::Downloaded
+    );
+    assert_eq!(
+        pcb.read("saves/Chrono_Trigger_US.srm").unwrap(),
+        b"from-pca-v1"
+    );
+
+    // Conflito antes de abrir quando os dois lados mudam.
+    pcb.write("saves/Chrono_Trigger_US.srm", b"pcb-local-edit");
+    listing.set(vec![row_with_identity(
+        "s_ct",
+        "Chrono Trigger (USA).srm",
+        "snes",
+        b"from-pca-v2",
+        "v2",
+        Some("dev2"),
+        None,
+        Some("crc32:2d206bf7"),
+    )]);
+    assert_eq!(
+        pcb.engine.prelaunch(&pcb.alva, "ct_b").await,
+        PrelaunchOutcome::Conflict
+    );
+
+    // Resolve mantendo o local: sobe na mesma linha remota ("Chrono Trigger (USA).srm").
+    pcb.set_playing(Playing::Idle);
+    pcb.engine
+        .resolve(&pcb.alva, "file:snes/Chrono_Trigger_US.srm", Keep::Local)
+        .await
+        .unwrap();
+    let posts = pcb.reqs("POST", SAVES).await;
+    assert_eq!(posts.len(), 1);
+    assert_eq!(
+        field(&posts[0].body, "filename").as_deref(),
+        Some("Chrono Trigger (USA).srm")
+    );
+
+    // Historico e restore tambem encontram a linha s_ct mesmo com outro nome na nuvem.
+    Mock::given(method("GET"))
+        .and(path("/api/v1/saves/s_ct/versions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {
+                "version_id": "v2",
+                "content_hash": sha(b"from-pca-v2"),
+                "size_bytes": 11,
+                "server_created_at": "2026-11-13T10:05:00Z",
+                "client_mtime": null,
+                "last_seen_at": "2026-11-13T10:05:00Z",
+                "source_client": "reemu",
+                "origin_media": "rom",
+                "device_token_id": "dev2"
+            },
+            {
+                "version_id": "v1",
+                "content_hash": sha(b"from-pca-v1"),
+                "size_bytes": 11,
+                "server_created_at": "2026-11-13T10:00:00Z",
+                "client_mtime": null,
+                "last_seen_at": "2026-11-13T10:00:00Z",
+                "source_client": "reemu",
+                "origin_media": "rom",
+                "device_token_id": "dev2"
+            }
+        ])))
+        .mount(&pcb.server)
+        .await;
+
+    let vers = pcb
+        .engine
+        .versions(&pcb.alva, "file:snes/Chrono_Trigger_US.srm")
+        .await
+        .unwrap();
+    assert_eq!(vers.len(), 2);
+
+    pcb.engine
+        .restore(&pcb.alva, "file:snes/Chrono_Trigger_US.srm", "v1")
+        .await
+        .unwrap();
+    assert_eq!(
+        pcb.read("saves/Chrono_Trigger_US.srm").unwrap(),
+        b"from-pca-v1"
+    );
+    let all_posts = pcb.reqs("POST", SAVES).await;
+    assert_eq!(all_posts.len(), 2);
+    assert_eq!(
+        field(&all_posts[1].body, "filename").as_deref(),
+        Some("Chrono Trigger (USA).srm")
+    );
+}
+
+#[tokio::test]
+async fn exact_stem_always_wins_over_cross_filename_fallback() {
+    let _serial = SERIAL.lock().await;
+    const CT_UUID: &str = "550e8400-e29b-41d4-a716-446655440000";
+    let r = rig("exact-stem-wins").await;
+    add_rom_full(
+        &r,
+        "ct_us",
+        "Chrono Trigger (USA).sfc",
+        "snes",
+        "2D206BF7",
+        Some(CT_UUID),
+    )
+    .await;
+    add_rom_full(
+        &r,
+        "ct_jp",
+        "Chrono_Trigger_JP.sfc",
+        "snes",
+        "12345678",
+        Some(CT_UUID),
+    )
+    .await;
+    mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+    mount_files(
+        &r.server,
+        vec![row_with_identity(
+            "s_ct",
+            "Chrono Trigger (USA).srm",
+            "snes",
+            b"usa-only",
+            "v1",
+            None,
+            Some(CT_UUID),
+            Some("crc32:2d206bf7"),
+        )],
+    )
+    .await;
+    mount_content(&r.server, "s_ct", "v1", b"usa-only").await;
+
+    let report = r.pass().await.unwrap();
+    assert_eq!((report.uploaded, report.downloaded), (0, 1));
+    assert_eq!(
+        r.read("saves/Chrono Trigger (USA).srm").unwrap(),
+        b"usa-only"
+    );
+    assert!(r.read("saves/Chrono_Trigger_JP.srm").is_none());
 }

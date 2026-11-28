@@ -784,6 +784,8 @@ impl Engine {
             core: Some(&obj.file.core),
             core_version: Some(version),
             client_mtime: Some(rfc3339(seen.mtime)),
+            game_uuid: None,
+            slug: None,
         };
         let up: Uploaded = match self
             .upload_bytes(cx.alva, &cx.token, &obj.key, &meta, bytes, &seen.hash)

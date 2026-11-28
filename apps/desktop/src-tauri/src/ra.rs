@@ -448,6 +448,7 @@ fn handle_game_loaded(app: &AppHandle, snapshot: RaLoadedSnapshot) {
         unlocked_points: snapshot.summary.points_unlocked,
         total_points: snapshot.summary.points_core,
     };
+    crate::gas::on_ra_game_loaded(app, rom_id.clone(), snapshot.game_id, snapshot.hardcore);
     crate::gamelog::on_ra_game_loaded(app, rom_id.clone(), &snapshot);
     ra_state.set_live(Some(LiveGameAchievements {
         rom_id,
@@ -473,6 +474,7 @@ fn handle_runtime_event(app: &AppHandle, event: AchievementEvent) {
             badge_url,
         } => {
             ra_state.mark_live_unlocked(id, hardcore);
+            crate::gas::on_ra_achievement_unlocked(app, id, hardcore);
             crate::gamelog::on_ra_achievement_unlocked(
                 app,
                 id,
