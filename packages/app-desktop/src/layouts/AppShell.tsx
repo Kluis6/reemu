@@ -46,6 +46,7 @@ import { useAlvanistaHomeEvents } from "../hooks/useAlvanistaHome";
 import { useCatalogEvents } from "../hooks/useCatalog";
 import { useSyncEvents } from "../hooks/useSync";
 import { useFullscreen } from "../hooks/useFullscreen";
+import { useUiActivitySync } from "../hooks/useUiActivitySync";
 import { useUpdateCheck } from "../hooks/useUpdateCheck";
 import { RailIconBadge } from "../components/RailIconBadge";
 import { useSettingsBadges } from "../hooks/useSettingsBadges";
@@ -126,6 +127,7 @@ export function AppShell() {
   useShaderFailures();
   useCoreUpdates();
   usePackUpdates();
+  useUiActivitySync();
   const countForSettings = useSettingsBadges();
   const settingsCount = SETTINGS_SECTIONS.filter(({ key }) => countForSettings("/settings/" + key) > 0).length;
 

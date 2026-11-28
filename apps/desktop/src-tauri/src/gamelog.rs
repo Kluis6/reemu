@@ -942,6 +942,13 @@ pub async fn on_game_launched(app: &AppHandle, rom_id: Option<&str>) {
         .try_state::<crate::ra::RaState>()
         .is_some_and(|r| r.is_hardcore_active());
     crate::gas::on_game_launched(app, rom_id, game_id.clone(), system_id.clone(), ra_hardcore);
+    crate::presence::on_game_launched(
+        app,
+        rom_id,
+        game_id.clone(),
+        game_title.clone(),
+        system_id.clone(),
+    );
 
     let Some(gl) = app.try_state::<Arc<GamelogState>>() else {
         return;
@@ -980,6 +987,9 @@ pub async fn on_game_launched(app: &AppHandle, rom_id: Option<&str>) {
 pub fn on_ra_game_loaded(app: &AppHandle, rom_id: Option<String>, snapshot: &RaLoadedSnapshot) {
     if snapshot.incompatible_version || achievements::is_incompatible_game_id(snapshot.game_id) {
         return;
+    }
+    if !snapshot.title.trim().is_empty() {
+        crate::presence::on_game_title_fallback(app, &snapshot.title);
     }
     let Some(gl) = app.try_state::<Arc<GamelogState>>() else {
         return;
@@ -1055,6 +1065,7 @@ pub fn on_ra_achievement_unlocked(
 /// Finaliza gravacoes pendentes e encerra o check-in da sessao no Alvanista.
 pub async fn on_game_unloaded(app: &AppHandle) {
     crate::gas::on_game_unloaded(app);
+    crate::presence::on_game_unloaded(app);
     let Some(gl) = app.try_state::<Arc<GamelogState>>() else {
         return;
     };

@@ -91,13 +91,28 @@ pub(super) fn parts(app: &AppHandle) -> Option<(Arc<Engine>, tauri::State<'_, Al
     Some((engine, app.try_state::<Alvanista>()?))
 }
 
-/// A primeira passada com o app aberto e, dali em diante, uma a cada 10
-/// minutos sem jogo aberto.
+/// A primeira passada com o app aberto e, dali em diante, cadencia adaptativa
+/// sem jogo aberto: `5 min` em primeiro plano e recuo gradual em segundo plano
+/// (`10m -> 20m -> 40m -> 60m -> 120m`), acordando na volta ao foco.
 pub async fn run_on_start(app: AppHandle) {
     scheduled_pass(&app).await;
     tauri::async_runtime::spawn(async move {
+        let mut bg_step = 0u32;
+        let mut last_pass_at = tokio::time::Instant::now();
         loop {
-            tokio::time::sleep(IDLE_EVERY).await;
+            if let Some(coord) = app.try_state::<crate::presence::ActivityCoordinator>() {
+                coord
+                    .wait_next_cycle(
+                        crate::presence::SYNC_FG_EVERY,
+                        &crate::presence::SYNC_BG_STEPS,
+                        &mut bg_step,
+                        last_pass_at,
+                    )
+                    .await;
+            } else {
+                tokio::time::sleep(crate::presence::SYNC_FG_EVERY).await;
+            }
+            last_pass_at = tokio::time::Instant::now();
             scheduled_pass(&app).await;
         }
     });
@@ -237,5 +252,86 @@ pub(super) fn log_pass(what: &str, result: Result<PassReport, SyncError>) {
         ),
         Err(SyncError::NoAccount | SyncError::NotEnabled) => {}
         Err(e) => log::info!("sync: {what} terminou em {e}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use tokio::time::Instant;
+
+    #[tokio::test(start_paused = true)]
+    async fn cloud_save_idle_schedule_runs_every_5m_in_fg_and_backs_off_to_2h_in_bg() {
+        let coord = crate::presence::ActivityCoordinator::new();
+        let passes = Arc::new(AtomicUsize::new(0));
+        let passes_bg = passes.clone();
+        let coord_bg = coord.clone();
+
+        let worker = tokio::spawn(async move {
+            let mut bg_step = 0u32;
+            let mut last_pass_at = Instant::now();
+            loop {
+                coord_bg
+                    .wait_next_cycle(
+                        crate::presence::SYNC_FG_EVERY,
+                        &crate::presence::SYNC_BG_STEPS,
+                        &mut bg_step,
+                        last_pass_at,
+                    )
+                    .await;
+                if coord_bg.is_shutting_down() {
+                    break;
+                }
+                last_pass_at = Instant::now();
+                passes_bg.fetch_add(1, Ordering::SeqCst);
+            }
+        });
+
+        for _ in 0..5 {
+            tokio::task::yield_now().await;
+        }
+
+        // Em primeiro plano: 5m por passada.
+        tokio::time::advance(Duration::from_secs(5 * 60)).await;
+        for _ in 0..5 {
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(passes.load(Ordering::SeqCst), 1);
+
+        // Em segundo plano: 10m -> 20m -> 40m -> 60m -> 120m.
+        coord.set_ui_active(false, false);
+        for _ in 0..5 {
+            tokio::task::yield_now().await;
+        }
+        for (idx, mins) in [10u64, 20, 40, 60, 120].into_iter().enumerate() {
+            tokio::time::advance(Duration::from_secs(mins * 60 - 1)).await;
+            for _ in 0..5 {
+                tokio::task::yield_now().await;
+            }
+            assert_eq!(passes.load(Ordering::SeqCst), 1 + idx);
+
+            tokio::time::advance(Duration::from_secs(1)).await;
+            for _ in 0..5 {
+                tokio::task::yield_now().await;
+            }
+            assert_eq!(passes.load(Ordering::SeqCst), 2 + idx);
+        }
+
+        // Passaram 6m em segundo plano (>= 5m) e a janela volta ao foco -> passada imediata!
+        tokio::time::advance(Duration::from_secs(6 * 60)).await;
+        for _ in 0..5 {
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(passes.load(Ordering::SeqCst), 6);
+
+        coord.set_ui_active(true, true);
+        for _ in 0..5 {
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(passes.load(Ordering::SeqCst), 7);
+
+        coord.mark_shutting_down();
+        let _ = worker.await;
     }
 }

@@ -695,6 +695,9 @@ export const alvanistaOpenGame = (gameId: string) => invoke<void>('alvanista_ope
 /** Abre o perfil público de um Gamer conectado no navegador do sistema. */
 export const alvanistaOpenUser = (username: string) =>
   invoke<void>('alvanista_open_user', { username })
+/** Informa ao coordenador Rust se a interface WebView esta visivel e com foco. */
+export const alvanistaSetUiActive = (visible: boolean, focused: boolean) =>
+  invoke<void>('alvanista_set_ui_active', { visible, focused })
 
 export interface PartnerFriendPlaying {
   gameId: string | null

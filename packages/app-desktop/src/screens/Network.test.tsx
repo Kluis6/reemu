@@ -109,4 +109,88 @@ describe('Network screen', () => {
     await act(async () => root.unmount())
     host.remove()
   })
+
+  it('polls friends every 60s only when showOnline is enabled and the window is focused in foreground', async () => {
+    vi.useFakeTimers()
+    const hasFocusSpy = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+    const visibilitySpy = vi
+      .spyOn(document, 'visibilityState', 'get')
+      .mockReturnValue('visible')
+
+    try {
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      qc.setQueryData(ALVANISTA_CACHED_KEY, makeStatus(['profile:read', 'friends:read']))
+      tauriMocks.alvanistaFriends.mockResolvedValue([
+        {
+          id: 'alva_kluis',
+          username: 'kluis',
+          avatarUrl: null,
+          profileUrl: 'https://www.alvanista.com/users/kluis',
+          online: true,
+          playingNow: {
+            gameId: null,
+            title: 'Chrono Trigger',
+            platform: 'SNES',
+            customMessage: null,
+          },
+        },
+      ])
+
+      const host = document.createElement('div')
+      document.body.appendChild(host)
+      const root = createRoot(host)
+      await act(async () => {
+        root.render(
+          <QueryClientProvider client={qc}>
+            <FluentProvider theme={webDarkTheme}>
+              <MemoryRouter>
+                <Network />
+              </MemoryRouter>
+            </FluentProvider>
+          </QueryClientProvider>,
+        )
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50)
+      })
+      expect(tauriMocks.alvanistaFriends).toHaveBeenCalledTimes(1)
+
+      // Com showOnline desligado, nao faz polling periodico.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(120_000)
+      })
+      expect(tauriMocks.alvanistaFriends).toHaveBeenCalledTimes(1)
+
+      // Liga showOnline em primeiro plano: atualiza a cada 60s.
+      const toggle = host.querySelector('input[type="checkbox"]') as HTMLInputElement
+      await act(async () => {
+        toggle.click()
+        await vi.advanceTimersByTimeAsync(50)
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000)
+      })
+      expect(tauriMocks.alvanistaFriends).toHaveBeenCalledTimes(2)
+
+      // Perde o foco / vai para segundo plano: zero requisicoes em background.
+      hasFocusSpy.mockReturnValue(false)
+      visibilitySpy.mockReturnValue('hidden')
+      await act(async () => {
+        window.dispatchEvent(new Event('blur'))
+        document.dispatchEvent(new Event('visibilitychange'))
+        await vi.advanceTimersByTimeAsync(50)
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(180_000)
+      })
+      expect(tauriMocks.alvanistaFriends).toHaveBeenCalledTimes(2)
+
+      await act(async () => root.unmount())
+      host.remove()
+    } finally {
+      hasFocusSpy.mockRestore()
+      visibilitySpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
 })

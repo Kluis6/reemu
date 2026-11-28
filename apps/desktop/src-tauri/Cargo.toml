@@ -51,7 +51,7 @@ walkdir = "2"
 tauri-plugin-dialog = "2"
 # Configurações › Sistema: iniciar junto com o sistema (v2.tauri.app/plugin/autostart).
 tauri-plugin-autostart = "2"
-tokio = { version = "1", features = ["time", "rt", "sync"] }
+tokio = { version = "1", features = ["time", "rt", "sync", "macros"] }
 # Entrar com Alvanista (src/alvanista/): PKCE (SHA-256 + base64url), callback
 # em 127.0.0.1 e abertura do navegador de sistema. Só o Rust abre URLs, e só
 # do site do Alvanista.
@@ -85,7 +85,7 @@ tauri-plugin-updater = { version = "2", default-features = false, features = ["r
 sysinfo = { version = "0.40.3", default-features = false, features = ["system"] }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["macros", "rt", "net"] }
+tokio = { version = "1", features = ["macros", "rt", "net", "test-util"] }
 # Servidor HTTP local dos testes do sync (src/sync/): o Alvanista de mentira.
 wiremock = "0.6"
 # Lê as linhas de `alvanista_state` nos testes (o token não pode estar nelas).

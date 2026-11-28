@@ -26,6 +26,7 @@ mod gpu;
 const SHOW_AFTER_PRESENTS: u32 = if cfg!(target_os = "windows") { 2 } else { 1 };
 mod perf;
 mod play_clock;
+pub mod presence;
 mod profile;
 mod ra;
 mod shader_failure;
@@ -81,6 +82,7 @@ pub fn run() {
         .manage(updates::UpdateState::default())
         .manage(ra::RaState::default())
         .manage(gas::GasState::default())
+        .manage(presence::ActivityCoordinator::new())
         .setup(|app| {
             shader_failure::init(app.handle().clone());
             gpu::set_shader_failure_hook(|source, error| {
@@ -163,12 +165,16 @@ pub fn run() {
                     sync::device::DeviceStore::new(pool, keyring),
                 ));
                 // Desconectar revoga o aparelho; a conta que acaba no site o esquece.
-                app.state::<alvanista::Alvanista>()
-                    .attach_sync(sync_service.clone());
+                let alva_state = app.state::<alvanista::Alvanista>();
+                alva_state.attach_sync(sync_service.clone());
+                alva_state
+                    .attach_presence(app.state::<presence::ActivityCoordinator>().inner().clone());
                 app.manage(sync_service);
             }
             let sync_pool = db.clone();
             app.manage(AppState::new(base.clone(), db, audio_config, hotkeys));
+            presence::install_session_probe(app.handle());
+            presence::sync_from_main_window(app.handle());
             ra::install_session_bridge(app.handle());
             let sync_service = app
                 .try_state::<std::sync::Arc<sync::SyncService>>()
@@ -381,6 +387,7 @@ pub fn run() {
             alvanista::home::alvanista_home_highlights,
             alvanista::home::alvanista_set_home_highlights_enabled,
             alvanista::home::alvanista_open_home_item,
+            presence::alvanista_set_ui_active,
             catalog::catalog_status,
             catalog::catalog_set_enabled,
             catalog::catalog_run_now,
@@ -606,12 +613,30 @@ pub fn run() {
                     .unwrap_or_else(|p| p.into_inner()) =
                     Some((ox, oy, size.width.max(1), size.height.max(1)));
             }
+            presence::sync_from_main_window(app_handle);
+        }
+        tauri::RunEvent::WindowEvent {
+            label,
+            event: tauri::WindowEvent::Focused(focused),
+            ..
+        } if label == "main" => {
+            presence::on_main_window_focused(app_handle, focused);
+        }
+        tauri::RunEvent::WindowEvent {
+            label,
+            event: tauri::WindowEvent::Destroyed,
+            ..
+        } if label == "main" => {
+            presence::on_main_window_destroyed(app_handle);
         }
         // Fechamento (X da janela, Alt+F4, `quit_app`): descarrega o jogo antes
         // de sair pra fazer o flush final da save RAM `.srm`. Sem isso só o
         // flush periódico (10s) protegia. Idempotente se já não há jogo.
         tauri::RunEvent::ExitRequested { .. } => {
-            tauri::async_runtime::block_on(gamelog::on_game_unloaded(app_handle));
+            tauri::async_runtime::block_on(async {
+                gamelog::on_game_unloaded(app_handle).await;
+                presence::on_app_exit(app_handle).await;
+            });
             let _ = app_handle.state::<AppState>().session.unload();
         }
         _ => {}
