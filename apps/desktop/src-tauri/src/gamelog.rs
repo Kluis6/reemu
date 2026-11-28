@@ -933,13 +933,18 @@ async fn attach_item_to_active_session<R: tauri::Runtime>(
 
 /// Chamado em `load_game` quando qualquer ROM abre.
 pub async fn on_game_launched(app: &AppHandle, rom_id: Option<&str>) {
-    let Some(gl) = app.try_state::<Arc<GamelogState>>() else {
-        return;
-    };
     let state = app.state::<AppState>();
     let (game_id, game_title, system_id) = match (state.db.as_ref(), rom_id) {
         (Some(pool), Some(rid)) => resolve_rom_mapping(pool, rid).await,
         _ => (None, None, None),
+    };
+    let ra_hardcore = app
+        .try_state::<crate::ra::RaState>()
+        .is_some_and(|r| r.is_hardcore_active());
+    crate::gas::on_game_launched(app, rom_id, game_id.clone(), system_id.clone(), ra_hardcore);
+
+    let Some(gl) = app.try_state::<Arc<GamelogState>>() else {
+        return;
     };
 
     // Preserva eventual `ra_game_id` caso o `GameLoaded` do rcheevos ja tenha chegado.
@@ -1043,6 +1048,7 @@ pub fn on_ra_achievement_unlocked(
 /// Chamado em `unload_game` e no fechamento do app.
 /// Finaliza gravacoes pendentes e encerra o check-in da sessao no Alvanista.
 pub async fn on_game_unloaded(app: &AppHandle) {
+    crate::gas::on_game_unloaded(app);
     let Some(gl) = app.try_state::<Arc<GamelogState>>() else {
         return;
     };

@@ -563,6 +563,8 @@ impl Engine {
             core: None,
             core_version: None,
             client_mtime: Some(rfc3339(now_secs())),
+            game_uuid: None,
+            slug: None,
         };
         match self
             .upload_bytes(alva, token, &key, &meta, bytes, &hash)

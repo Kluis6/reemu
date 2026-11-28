@@ -45,6 +45,8 @@ pub struct SaveFile {
     pub rom_id: Option<String>,
     /// O CRC32 dessa ROM (D113: fica ao lado da base).
     pub rom_crc32: Option<String>,
+    /// O UUID do jogo no catálogo Alvanista/GameKave, quando resolvido.
+    pub game_uuid: Option<String>,
     pub platform: &'static str,
     /// O campo `core` da linha na nuvem: a pasta, como a porta WebDAV do
     /// Alvanista arquiva esses arquivos, ou a raiz `saves/...` nas pastas.
@@ -290,11 +292,76 @@ pub fn parse_key(key: &str) -> Option<(&str, Option<&str>, &str)> {
     })
 }
 
+/// UUID canônico (36 caracteres hex minúsculos separados por hífens).
+pub fn clean_uuid(raw: &str) -> Option<String> {
+    let s = raw.trim();
+    if s.len() != 36 {
+        return None;
+    }
+    for (idx, b) in s.bytes().enumerate() {
+        if matches!(idx, 8 | 13 | 18 | 23) {
+            if b != b'-' {
+                return None;
+            }
+        } else if !b.is_ascii_hexdigit() {
+            return None;
+        }
+    }
+    Some(s.to_ascii_lowercase())
+}
+
+/// CRC32 canônico de 8 dígitos hexadecimais minúsculos.
+pub fn clean_crc32_hex(raw: &str) -> Option<String> {
+    let s = raw.trim();
+    (s.len() == 8 && s.bytes().all(|b| b.is_ascii_hexdigit())).then(|| s.to_ascii_lowercase())
+}
+
+/// O `slug` enviado nos saves unitários de ROM quando o CRC32 é válido.
+pub fn crc32_slug(raw: &str) -> Option<String> {
+    clean_crc32_hex(raw).map(|h| format!("crc32:{h}"))
+}
+
+/// Extrai os 8 dígitos hex minúsculos de um `slug` no formato `crc32:<8hex>`.
+pub fn parse_crc32_slug(slug: &str) -> Option<String> {
+    let s = slug.trim();
+    if s.len() == 14 && s[..6].eq_ignore_ascii_case("crc32:") {
+        clean_crc32_hex(&s[6..])
+    } else {
+        None
+    }
+}
+
+/// `rom_id -> game_uuid` canônico, combinando `game_metadata` e `rom_resolution`.
+pub async fn rom_game_uuids(db: &db::Db) -> Result<HashMap<String, String>, String> {
+    let mut out = HashMap::new();
+    let summaries = db::MetadataRepo::new(db.clone())
+        .library_summaries()
+        .await
+        .map_err(|e| format!("metadados de ROMs: {e}"))?;
+    for (rom_id, sum) in summaries {
+        if let Some(u) = sum.game_uuid.as_deref().and_then(clean_uuid) {
+            out.insert(rom_id, u);
+        }
+    }
+    let found = db::RomResolutionRepo::new(db.clone())
+        .all_found()
+        .await
+        .map_err(|e| format!("resolução de ROMs: {e}"))?;
+    for res in found {
+        if let Some(u) = res.game_uuid.as_deref().and_then(clean_uuid) {
+            out.insert(res.rom_id, u);
+        }
+    }
+    Ok(out)
+}
+
 /// Uma ROM da biblioteca, pelo que o cloud save precisa dela.
 #[derive(Debug, Clone)]
 struct RomRef {
     id: String,
+    stem: String,
     crc32: String,
+    game_uuid: Option<String>,
     platform: &'static str,
 }
 
@@ -320,6 +387,10 @@ pub struct LocalSaves {
     system_dir: PathBuf,
     /// Stem do save -> as ROMs com esse stem, na ordem da biblioteca.
     stems: HashMap<String, Vec<RomRef>>,
+    /// Plataforma da nuvem -> ROMs dessa plataforma com stem válido, na ordem da biblioteca.
+    roms_by_platform: HashMap<&'static str, Vec<RomRef>>,
+    /// Id da ROM -> `game_uuid` resolvido no catálogo.
+    game_uuids: HashMap<String, String>,
     /// Id da ROM -> plataforma da nuvem.
     platforms: HashMap<String, &'static str>,
     /// Id da ROM -> `system_id` do ReEmu.
@@ -364,10 +435,15 @@ impl LocalSaves {
             for (slot_name, path) in folder_dirs(&self.save_dir.join(rel))? {
                 let filename = format!("{slot_name}.zip");
                 let (rom_id, rom_crc32) = self.owner_for_folder(sys, &slot_name);
+                let game_uuid = rom_id
+                    .as_deref()
+                    .and_then(|id| self.rom_game_uuid(id))
+                    .map(str::to_owned);
                 out.push(SaveFile {
                     key: format!("file:{platform}/{core}/{filename}"),
                     rom_id,
                     rom_crc32,
+                    game_uuid,
                     platform,
                     core: Some(core),
                     filename,
@@ -389,23 +465,92 @@ impl LocalSaves {
         if !plain_name(filename) || !ROM_SAVE_EXTENSIONS.contains(&ext) {
             return Vec::new();
         }
+        let Some(stem_roms) = self.stems.get(stem) else {
+            return Vec::new();
+        };
         let mut platforms = HashSet::new();
-        self.stems
-            .get(stem)
-            .into_iter()
-            .flatten()
+        stem_roms
+            .iter()
             .filter(|r| platforms.insert(r.platform))
-            .map(|r| SaveFile {
-                key: format!("file:{}/{filename}", r.platform),
-                rom_id: Some(r.id.clone()),
-                rom_crc32: Some(r.crc32.clone()),
-                platform: r.platform,
-                core: None,
-                filename: filename.to_owned(),
-                path: self.save_dir.join(filename),
-                is_folder: false,
+            .map(|r| {
+                let game_uuid = r.game_uuid.clone().or_else(|| {
+                    stem_roms
+                        .iter()
+                        .filter(|o| o.platform == r.platform)
+                        .find_map(|o| o.game_uuid.clone())
+                });
+                SaveFile {
+                    key: format!("file:{}/{filename}", r.platform),
+                    rom_id: Some(r.id.clone()),
+                    rom_crc32: Some(r.crc32.clone()),
+                    game_uuid,
+                    platform: r.platform,
+                    core: None,
+                    filename: filename.to_owned(),
+                    path: self.save_dir.join(filename),
+                    is_folder: false,
+                }
             })
             .collect()
+    }
+
+    /// Há uma ROM local nesta plataforma com exatamente este stem?
+    pub fn has_exact_rom_stem(&self, platform: &str, stem: &str) -> bool {
+        self.stems.get(stem).is_some_and(|list| {
+            list.iter()
+                .any(|r| platform == "other" || r.platform == platform)
+        })
+    }
+
+    /// Casamento de fallback para um save unitário de ROM (`core == None`,
+    /// extensão em `ROM_SAVE_EXTENSIONS`) quando não existe ROM local na mesma
+    /// plataforma com o stem exato de `remote_filename`: casa por `crc32`
+    /// (`slug == "crc32:<8hex>"`) ou por `game_uuid` na plataforma remota e
+    /// devolve a vaga local com o stem da ROM encontrada aqui.
+    pub fn fallback_rom_slot(
+        &self,
+        remote_platform: &str,
+        remote_filename: &str,
+        remote_game_uuid: Option<&str>,
+        remote_slug: Option<&str>,
+    ) -> Option<SaveFile> {
+        if !plain_name(remote_filename) {
+            return None;
+        }
+        let (remote_stem, raw_ext) = remote_filename.rsplit_once('.')?;
+        let ext = ROM_SAVE_EXTENSIONS
+            .iter()
+            .copied()
+            .find(|e| e.eq_ignore_ascii_case(raw_ext))?;
+        if self.has_exact_rom_stem(remote_platform, remote_stem) {
+            return None;
+        }
+        let want_uuid = remote_game_uuid.and_then(clean_uuid);
+        let want_crc = remote_slug.and_then(parse_crc32_slug);
+        if want_uuid.is_none() && want_crc.is_none() {
+            return None;
+        }
+        let candidates = self.roms_by_platform.get(remote_platform)?;
+        let matched = want_crc
+            .as_deref()
+            .and_then(|crc| {
+                candidates.iter().find(|r| {
+                    clean_crc32_hex(&r.crc32).as_deref() == Some(crc)
+                        && !(want_uuid.is_some()
+                            && r.game_uuid.is_some()
+                            && r.game_uuid != want_uuid)
+                })
+            })
+            .or_else(|| {
+                let uid = want_uuid.as_deref()?;
+                candidates
+                    .iter()
+                    .find(|r| r.game_uuid.as_deref() == Some(uid))
+            })?;
+        let local_filename = format!("{}.{ext}", matched.stem);
+        self.rom_slots(&local_filename)
+            .into_iter()
+            .find(|s| s.platform == matched.platform)
     }
 
     /// Onde fica um cartão do PS2 ou um VMU (`core` é a pasta, como na nuvem).
@@ -423,6 +568,7 @@ impl LocalSaves {
             key: format!("file:{platform}/{core}/{filename}"),
             rom_id: None,
             rom_crc32: None,
+            game_uuid: None,
             platform,
             core: Some(core),
             filename: filename.to_owned(),
@@ -439,10 +585,15 @@ impl LocalSaves {
         let (sys, grp_core, rel) = FOLDER_GROUPS.iter().find(|g| g.1 == core)?;
         let platform = platform_for_system(sys);
         let (rom_id, rom_crc32) = self.owner_for_folder(sys, slot_name);
+        let game_uuid = rom_id
+            .as_deref()
+            .and_then(|id| self.rom_game_uuid(id))
+            .map(str::to_owned);
         Some(SaveFile {
             key: format!("file:{platform}/{grp_core}/{filename}"),
             rom_id,
             rom_crc32,
+            game_uuid,
             platform,
             core: Some(grp_core),
             filename: filename.to_owned(),
@@ -474,6 +625,11 @@ impl LocalSaves {
         self.platforms.get(rom_id).copied()
     }
 
+    /// O `game_uuid` resolvido no catálogo para uma ROM da biblioteca.
+    pub fn rom_game_uuid(&self, rom_id: &str) -> Option<&str> {
+        self.game_uuids.get(rom_id).map(String::as_str)
+    }
+
     /// Um save sem `rom_id` (cartão, VMU ou pasta sem serial casado) pertence
     /// ao escopo de `rom_id`? Nas pastas `other`, restringe pelo `system_id`
     /// exato (`psp` vs `nds`), nunca misturando com outros sistemas `other`.
@@ -495,9 +651,18 @@ fn save_stem(rom: &Rom) -> Option<String> {
 /// Onde os saves de uma ROM ficam neste disco, existam ou não: um por
 /// extensão de save, na ordem de `ROM_SAVE_EXTENSIONS`.
 pub fn rom_slot_files(rom: &Rom, save_dir: &Path) -> Vec<SaveFile> {
+    rom_slot_files_with_uuid(rom, None, save_dir)
+}
+
+pub fn rom_slot_files_with_uuid(
+    rom: &Rom,
+    game_uuid: Option<&str>,
+    save_dir: &Path,
+) -> Vec<SaveFile> {
     let Some(stem) = save_stem(rom) else {
         return Vec::new();
     };
+    let clean_game_uuid = game_uuid.and_then(clean_uuid);
     let platform = platform_for_system(&rom.system_id);
     ROM_SAVE_EXTENSIONS
         .iter()
@@ -507,6 +672,7 @@ pub fn rom_slot_files(rom: &Rom, save_dir: &Path) -> Vec<SaveFile> {
                 key: format!("file:{platform}/{filename}"),
                 rom_id: Some(rom.id.clone()),
                 rom_crc32: Some(rom.crc32.clone()),
+                game_uuid: clean_game_uuid.clone(),
                 platform,
                 core: None,
                 path: save_dir.join(&filename),
@@ -532,6 +698,7 @@ pub fn system_saves(system_dir: &Path, platform: &str) -> Result<Vec<SaveFile>, 
                 key: format!("file:{p}/{core}/{filename}"),
                 rom_id: None,
                 rom_crc32: None,
+                game_uuid: None,
                 platform: p,
                 core: Some(core),
                 filename,
@@ -664,24 +831,43 @@ async fn list_roms(repo: &dyn RomRepository) -> Result<Vec<Rom>, String> {
     repo.list().await.map_err(|e| format!("lista de ROMs: {e}"))
 }
 
-/// O mapa da biblioteca (stem, serial e plataforma de cada ROM), sem tocar o disco.
-fn index(roms: &[Rom], save_dir: &Path, system_dir: &Path) -> LocalSaves {
+/// O mapa da biblioteca (stem, serial, `game_uuid` e plataforma de cada ROM), sem tocar o disco.
+fn index(
+    roms: &[Rom],
+    game_uuids: HashMap<String, String>,
+    save_dir: &Path,
+    system_dir: &Path,
+) -> LocalSaves {
     let mut saves = LocalSaves {
         save_dir: save_dir.to_owned(),
         system_dir: system_dir.to_owned(),
+        game_uuids,
         ..LocalSaves::default()
     };
     for rom in roms {
         let platform = platform_for_system(&rom.system_id);
+        let game_uuid = saves.game_uuids.get(&rom.id).cloned();
         saves.platforms.insert(rom.id.clone(), platform);
         saves.systems.insert(rom.id.clone(), rom.system_id.clone());
         let stem = save_stem(rom);
         if let Some(ref st) = stem {
-            saves.stems.entry(st.clone()).or_default().push(RomRef {
+            let rom_ref = RomRef {
                 id: rom.id.clone(),
+                stem: st.clone(),
                 crc32: rom.crc32.clone(),
+                game_uuid,
                 platform,
-            });
+            };
+            saves
+                .stems
+                .entry(st.clone())
+                .or_default()
+                .push(rom_ref.clone());
+            saves
+                .roms_by_platform
+                .entry(platform)
+                .or_default()
+                .push(rom_ref);
         }
         if FOLDER_GROUPS
             .iter()
@@ -714,33 +900,58 @@ async fn blocking<T: Send + 'static>(
         .map_err(|e| format!("leitura dos saves interrompida: {e}"))?
 }
 
-/// O mapa da biblioteca, sem arquivo nenhum: onde o save de cada chave fica.
-/// Só o SQLite, sem tocar o disco.
-pub async fn library(
+/// O mapa da biblioteca, sem arquivo nenhum: onde o save de cada chave fica,
+/// incluindo os `game_uuid` resolvidos no banco. Só o SQLite, sem tocar o disco.
+pub async fn library_with_db(
+    db: &db::Db,
     repo: &dyn RomRepository,
     save_dir: &Path,
     system_dir: &Path,
 ) -> Result<LocalSaves, String> {
     let roms = list_roms(repo).await?;
-    Ok(index(&roms, save_dir, system_dir))
+    let uuids = rom_game_uuids(db).await?;
+    Ok(index(&roms, uuids, save_dir, system_dir))
 }
 
-/// Os arquivos de save da conta que existem agora neste disco (`files`) e o
-/// mapa de onde fica o save de cada ROM. A pasta de saves é lida uma vez, não
-/// um arquivo por ROM. Erro de leitura é erro: o motor aborta a passada.
+#[cfg(test)]
 pub async fn account_saves(
     repo: &dyn RomRepository,
     save_dir: &Path,
     system_dir: &Path,
 ) -> Result<LocalSaves, String> {
     let roms = list_roms(repo).await?;
+    account_saves_from(roms, HashMap::new(), save_dir, system_dir).await
+}
+
+/// Os arquivos de save da conta que existem agora neste disco (`files`) e o
+/// mapa de onde fica o save de cada ROM (com `game_uuid` resolvidos no banco).
+/// A pasta de saves é lida uma vez, não um arquivo por ROM. Erro de leitura é
+/// erro: o motor aborta a passada.
+pub async fn account_saves_with_db(
+    db: &db::Db,
+    repo: &dyn RomRepository,
+    save_dir: &Path,
+    system_dir: &Path,
+) -> Result<LocalSaves, String> {
+    let roms = list_roms(repo).await?;
+    let uuids = rom_game_uuids(db).await?;
+    account_saves_from(roms, uuids, save_dir, system_dir).await
+}
+
+async fn account_saves_from(
+    roms: Vec<Rom>,
+    uuids: HashMap<String, String>,
+    save_dir: &Path,
+    system_dir: &Path,
+) -> Result<LocalSaves, String> {
     let (save_dir, system_dir) = (save_dir.to_owned(), system_dir.to_owned());
     blocking(move || {
-        let mut saves = index(&roms, &save_dir, &system_dir);
+        let mut saves = index(&roms, uuids, &save_dir, &system_dir);
         let names = file_names(&save_dir)?;
         let mut seen = Seen::default();
         for rom in &roms {
-            for file in rom_slot_files(rom, &save_dir) {
+            let game_uuid = saves.rom_game_uuid(&rom.id);
+            for file in rom_slot_files_with_uuid(rom, game_uuid, &save_dir) {
                 if names.contains(&fold(&file.filename)) {
                     seen.push(&mut saves.files, file);
                 }
@@ -759,12 +970,7 @@ pub async fn account_saves(
     .await
 }
 
-/// Só os saves de uma ROM: as vagas dela em `<save_dir>`, os cartões e VMUs da
-/// plataforma dela e as pastas de save do sistema dela (`psp`, `nds`). O mapa
-/// da biblioteca vem inteiro (do SQLite), mas o disco só é consultado nesses
-/// lugares. A chave de cada arquivo é a mesma que a passada completa daria (a
-/// primeira ROM da biblioteca com aquele stem). `None` quando a ROM não está na
-/// biblioteca.
+#[cfg(test)]
 pub async fn rom_saves(
     repo: &dyn RomRepository,
     save_dir: &Path,
@@ -772,18 +978,44 @@ pub async fn rom_saves(
     rom_id: &str,
 ) -> Result<Option<LocalSaves>, String> {
     let roms = list_roms(repo).await?;
+    rom_saves_from(roms, HashMap::new(), save_dir, system_dir, rom_id).await
+}
+
+/// Só os saves de uma ROM: as vagas dela em `<save_dir>`, os cartões e VMUs da
+/// plataforma dela e as pastas de save do sistema dela (`psp`, `nds`), com os
+/// `game_uuid` resolvidos no banco. `None` quando a ROM não está na biblioteca.
+pub async fn rom_saves_with_db(
+    db: &db::Db,
+    repo: &dyn RomRepository,
+    save_dir: &Path,
+    system_dir: &Path,
+    rom_id: &str,
+) -> Result<Option<LocalSaves>, String> {
+    let roms = list_roms(repo).await?;
+    let uuids = rom_game_uuids(db).await?;
+    rom_saves_from(roms, uuids, save_dir, system_dir, rom_id).await
+}
+
+async fn rom_saves_from(
+    roms: Vec<Rom>,
+    uuids: HashMap<String, String>,
+    save_dir: &Path,
+    system_dir: &Path,
+    rom_id: &str,
+) -> Result<Option<LocalSaves>, String> {
     let (save_dir, system_dir, rom_id) = (
         save_dir.to_owned(),
         system_dir.to_owned(),
         rom_id.to_owned(),
     );
     blocking(move || {
-        let mut saves = index(&roms, &save_dir, &system_dir);
+        let mut saves = index(&roms, uuids, &save_dir, &system_dir);
         let Some(rom) = roms.iter().find(|r| r.id == rom_id) else {
             return Ok(None);
         };
         let mut seen = Seen::default();
-        for slot in rom_slot_files(rom, &save_dir) {
+        let game_uuid = saves.rom_game_uuid(&rom.id).map(str::to_owned);
+        for slot in rom_slot_files_with_uuid(rom, game_uuid.as_deref(), &save_dir) {
             let file = saves
                 .rom_slots(&slot.filename)
                 .into_iter()
@@ -825,7 +1057,7 @@ pub async fn rom_folder_saves(
     let rom_id = rom.id.clone();
     let system_id = rom.system_id.clone();
     blocking(move || {
-        let saves = index(&roms, &save_dir, Path::new(""));
+        let saves = index(&roms, HashMap::new(), &save_dir, Path::new(""));
         let found = saves.folder_saves_for_system(Some(&system_id))?;
         Ok(found
             .into_iter()
@@ -1586,6 +1818,145 @@ mod tests {
         ] {
             assert!(local.slot_for_key(bad).is_none(), "{bad}");
         }
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn fallback_rom_slot_prefers_exact_stem_and_matches_crc32_or_game_uuid() {
+        use domain::metadata::{
+            GameDetails, GameMetadata, MetadataRepository, ResolutionState, RomResolution,
+        };
+
+        assert_eq!(crc32_slug("2D206BF7").as_deref(), Some("crc32:2d206bf7"));
+        assert_eq!(crc32_slug("CRC"), None);
+        assert_eq!(
+            parse_crc32_slug("CRC32:2D206BF7").as_deref(),
+            Some("2d206bf7")
+        );
+        assert_eq!(parse_crc32_slug("other:2d206bf7"), None);
+
+        let root = temp("fallback-slots");
+        let saves = root.join("saves");
+        let system = root.join("system");
+        let pool = connect_in_memory().await.unwrap();
+        let repo = RomsRepo::new(pool.clone());
+
+        const CT_UUID: &str = "550e8400-e29b-41d4-a716-446655440000";
+        const SM_UUID: &str = "11111111-2222-3333-4444-555555555555";
+
+        repo.add(&Rom {
+            id: "ct".into(),
+            file_path: "C:/roms/Chrono_Trigger_US.sfc".into(),
+            crc32: "2D206BF7".into(),
+            md5: "MD5".into(),
+            system_id: "snes".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+        repo.add(&Rom {
+            id: "sm".into(),
+            file_path: "C:/roms/Super Metroid (USA).sfc".into(),
+            crc32: "AABBCCDD".into(),
+            md5: "MD5".into(),
+            system_id: "snes".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+        db::RomResolutionRepo::new(pool.clone())
+            .put(&RomResolution {
+                rom_id: "ct".into(),
+                state: ResolutionState::Found,
+                game_uuid: Some(CT_UUID.to_ascii_uppercase()),
+                matched_by: Some("crc32".into()),
+                reason: None,
+                retry_after: None,
+                media_pending: false,
+                answer_json: None,
+                resolved_at: 1,
+            })
+            .await
+            .unwrap();
+        db::MetadataRepo::new(pool.clone())
+            .upsert_metadata(&GameMetadata {
+                rom_id: "sm".into(),
+                title: "Super Metroid".into(),
+                description: None,
+                cover_url: None,
+                release_date: None,
+                genre: None,
+                provider_source: Some("gamekave".into()),
+                game_uuid: Some(SM_UUID.into()),
+                details: GameDetails::default(),
+            })
+            .await
+            .unwrap();
+
+        let local = library_with_db(&pool, &repo, &saves, &system)
+            .await
+            .unwrap();
+        assert_eq!(local.rom_game_uuid("ct"), Some(CT_UUID));
+        assert_eq!(local.rom_game_uuid("sm"), Some(SM_UUID));
+
+        // Regra 1: stem exato na plataforma impede o fallback.
+        assert!(local
+            .fallback_rom_slot(
+                "snes",
+                "Super Metroid (USA).srm",
+                Some(SM_UUID),
+                Some("crc32:aabbccdd"),
+            )
+            .is_none());
+
+        // Regra 2: stem diferente casa por game_uuid ou por crc32 e preserva a extensao.
+        let by_uuid = local
+            .fallback_rom_slot("snes", "Chrono Trigger (USA).srm", Some(CT_UUID), None)
+            .unwrap();
+        assert_eq!(by_uuid.key, "file:snes/Chrono_Trigger_US.srm");
+        assert_eq!(by_uuid.path, saves.join("Chrono_Trigger_US.srm"));
+        assert_eq!(by_uuid.rom_id.as_deref(), Some("ct"));
+        assert_eq!(by_uuid.game_uuid.as_deref(), Some(CT_UUID));
+
+        let by_crc = local
+            .fallback_rom_slot(
+                "snes",
+                "Chrono Trigger [U].rtc",
+                None,
+                Some("crc32:2d206bf7"),
+            )
+            .unwrap();
+        assert_eq!(by_crc.key, "file:snes/Chrono_Trigger_US.rtc");
+        assert_eq!(by_crc.path, saves.join("Chrono_Trigger_US.rtc"));
+
+        // Nunca casa ROM nao relacionada, plataforma errada, extensao invalida ou game_uuid contraditorio.
+        assert!(local
+            .fallback_rom_slot(
+                "snes",
+                "EarthBound.srm",
+                Some("99999999-9999-9999-9999-999999999999"),
+                Some("crc32:00000000"),
+            )
+            .is_none());
+        assert!(local
+            .fallback_rom_slot("gba", "Chrono Trigger (USA).srm", Some(CT_UUID), None)
+            .is_none());
+        assert!(local
+            .fallback_rom_slot("snes", "Chrono Trigger (USA).txt", Some(CT_UUID), None)
+            .is_none());
+        assert!(local
+            .fallback_rom_slot("snes", "../Chrono Trigger (USA).srm", Some(CT_UUID), None)
+            .is_none());
+        assert!(local
+            .fallback_rom_slot(
+                "snes",
+                "Other Game.srm",
+                Some("77777777-7777-7777-7777-777777777777"),
+                Some("crc32:2d206bf7"),
+            )
+            .is_none());
 
         let _ = std::fs::remove_dir_all(&root);
     }

@@ -154,6 +154,10 @@ pub struct RemoteFile {
     pub kind: String,
     pub platform: String,
     #[serde(default)]
+    pub game_uuid: Option<String>,
+    #[serde(default)]
+    pub slug: Option<String>,
+    #[serde(default)]
     pub core: Option<String>,
     /// Parte da chave da linha no servidor (com plataforma, tipo, nome, core e
     /// aparelho): o envio para uma linha que existe repete o dela.
@@ -203,6 +207,8 @@ pub struct UploadMeta<'a> {
     pub core_version: Option<&'a str>,
     /// RFC 3339.
     pub client_mtime: Option<String>,
+    pub game_uuid: Option<&'a str>,
+    pub slug: Option<&'a str>,
 }
 
 /// Resposta do envio (sempre 201, mesmo quando os bytes já existiam).
@@ -411,6 +417,12 @@ impl SavesApi {
         }
         if let Some(mtime) = &meta.client_mtime {
             form = form.text("client_mtime", mtime.clone());
+        }
+        if let Some(game_uuid) = meta.game_uuid {
+            form = form.text("game_uuid", game_uuid.to_owned());
+        }
+        if let Some(slug) = meta.slug {
+            form = form.text("slug", slug.to_owned());
         }
         let req = self
             .http
@@ -751,6 +763,8 @@ mod tests {
             core: None,
             core_version: None,
             client_mtime: None,
+            game_uuid: None,
+            slug: None,
         };
         assert!(api
             .upload("asv_t", &meta, vec![1u8; 128 * 1024])
@@ -905,6 +919,8 @@ mod tests {
                     core: Some("Snes9x"),
                     core_version: None,
                     client_mtime: Some("2026-11-13T10:00:00Z".into()),
+                    game_uuid: Some("550e8400-e29b-41d4-a716-446655440000"),
+                    slug: Some("crc32:2d206bf7"),
                 },
                 b"sram".to_vec(),
             )
@@ -931,6 +947,11 @@ mod tests {
             form_field(body, "client_mtime").as_deref(),
             Some("2026-11-13T10:00:00Z")
         );
+        assert_eq!(
+            form_field(body, "game_uuid").as_deref(),
+            Some("550e8400-e29b-41d4-a716-446655440000")
+        );
+        assert_eq!(form_field(body, "slug").as_deref(), Some("crc32:2d206bf7"));
         assert_eq!(form_field(body, "file").as_deref(), Some("sram"));
         assert!(String::from_utf8_lossy(body).contains("filename=\"Chrono.srm\""));
     }

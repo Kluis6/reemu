@@ -193,6 +193,27 @@ impl Engine {
             ),
             None => (file.platform, file.core, None, file.filename.as_str()),
         };
+        let (game_uuid_owned, slug_owned) = if file.core.is_none() && !file.is_folder {
+            let gu = if row
+                .and_then(|r| r.game_uuid.as_deref())
+                .is_some_and(|s| !s.trim().is_empty())
+            {
+                None
+            } else {
+                file.game_uuid.as_deref().and_then(local::clean_uuid)
+            };
+            let sl = if row
+                .and_then(|r| r.slug.as_deref())
+                .is_some_and(|s| !s.trim().is_empty())
+            {
+                None
+            } else {
+                file.rom_crc32.as_deref().and_then(local::crc32_slug)
+            };
+            (gu, sl)
+        } else {
+            (None, None)
+        };
         let meta = UploadMeta {
             platform,
             kind: "file",
@@ -200,6 +221,8 @@ impl Engine {
             core,
             core_version,
             client_mtime,
+            game_uuid: game_uuid_owned.as_deref(),
+            slug: slug_owned.as_deref(),
         };
         let up = self
             .upload_bytes(alva, token, &file.key, &meta, bytes, &hash)

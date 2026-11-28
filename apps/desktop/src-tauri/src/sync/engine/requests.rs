@@ -22,13 +22,14 @@ impl Engine {
             .find(|c| c.key == key)
             .ok_or_else(|| failed(format!("{}: sem conflito aberto", log_tag(key))))?;
         let token = self.token()?;
-        let file = self.file_for(key).await?;
+        let (library, file) = self.library_and_file_for(key).await?;
+        let base = self.repo.base_get(key).await.map_err(repo_err)?;
         let files = self.list_file(alva, &token, &file).await?;
         let names = by_name(&files, self.name_case);
         let row = files
             .iter()
             .find(|f| f.save_id == conflict.remote_save_id)
-            .or_else(|| pick(&names, &file));
+            .or_else(|| pick_remote(&names, &files, &library, base.as_ref(), &file));
         match keep {
             Keep::Local => {
                 if !self.may_upload(&file) {
@@ -114,14 +115,21 @@ impl Engine {
         self.ready(alva).await?;
         self.new_stamp();
         let token = self.token()?;
-        let file = self.file_for(key).await?;
+        let (library, file) = self.library_and_file_for(key).await?;
         if !self.may_write(Mode::Pass) || !self.may_upload(&file) {
             return Err(failed(format!("{}: jogo aberto", log_tag(key))));
         }
+        let base = self.repo.base_get(key).await.map_err(repo_err)?;
         let files = self.list_file(alva, &token, &file).await?;
-        let row = pick(&by_name(&files, self.name_case), &file)
-            .cloned()
-            .ok_or_else(|| failed(format!("{}: sem linha na nuvem", log_tag(key))))?;
+        let row = pick_remote(
+            &by_name(&files, self.name_case),
+            &files,
+            &library,
+            base.as_ref(),
+            &file,
+        )
+        .cloned()
+        .ok_or_else(|| failed(format!("{}: sem linha na nuvem", log_tag(key))))?;
         let versions = match self.sync.api.versions(&token, &row.save_id).await {
             Ok(v) => v,
             Err(err) => return Err(fail_error(self.file_error(alva, err, false).await)),
@@ -170,9 +178,17 @@ impl Engine {
     ) -> Result<Vec<SyncVersion>, SyncError> {
         self.ready(alva).await?;
         let token = self.token()?;
-        let file = self.file_for(key).await?;
+        let (library, file) = self.library_and_file_for(key).await?;
+        let base = self.repo.base_get(key).await.map_err(repo_err)?;
         let files = self.list_file(alva, &token, &file).await?;
-        let Some(row) = pick(&by_name(&files, self.name_case), &file).cloned() else {
+        let Some(row) = pick_remote(
+            &by_name(&files, self.name_case),
+            &files,
+            &library,
+            base.as_ref(),
+            &file,
+        )
+        .cloned() else {
             return Ok(Vec::new());
         };
         let versions = match self.sync.api.versions(&token, &row.save_id).await {
@@ -265,7 +281,12 @@ impl Engine {
             .await
             .map_err(|e| failed(format!("ROM {rom_id}: {e}")))?
             .ok_or_else(|| failed(format!("ROM {rom_id} não existe")))?;
-        let mut files = local::rom_slot_files(&rom, &self.dirs.saves);
+        let library =
+            local::library_with_db(&self.db, &self.roms, &self.dirs.saves, &self.dirs.system)
+                .await
+                .map_err(|e| failed(format!("saves locais: {e}")))?;
+        let mut files =
+            local::rom_slot_files_with_uuid(&rom, library.rom_game_uuid(rom_id), &self.dirs.saves);
         let platform = platform_for_system(&rom.system_id);
         files.extend(local::system_saves(&self.dirs.system, platform).map_err(failed)?);
         files.extend(
@@ -273,13 +294,14 @@ impl Engine {
                 .await
                 .map_err(failed)?,
         );
-        let versions_of = |key: &str| -> u32 {
+        let versions_of = |key: &str, base: Option<&BaseRow>| -> u32 {
             let known = lock(&self.known_files);
             files
                 .iter()
                 .find(|f| f.key == key)
                 .and_then(|f| {
-                    pick(&by_name(&known, self.name_case), f).map(|r| r.version_count.max(0) as u32)
+                    pick_remote(&by_name(&known, self.name_case), &known, &library, base, f)
+                        .map(|r| r.version_count.max(0) as u32)
                 })
                 .unwrap_or(0)
         };
@@ -288,10 +310,11 @@ impl Engine {
             .iter()
             .find(|c| c.rom_id.as_deref() == Some(rom_id) || files.iter().any(|f| f.key == c.key))
         {
+            let c_base = self.repo.base_get(&c.key).await.map_err(repo_err)?;
             return Ok(SaveLineStatus {
                 state: SaveLineState::Conflict,
                 synced_at: None,
-                versions: versions_of(&c.key),
+                versions: versions_of(&c.key, c_base.as_ref()),
                 key: Some(c.key.clone()),
             });
         }
@@ -358,7 +381,13 @@ impl Engine {
             // A linha da remoção não mostra o histórico.
             versions: match &removed {
                 Some(_) => 0,
-                None => main.as_deref().map_or(0, versions_of),
+                None => match main.as_deref() {
+                    Some(k) => {
+                        let b = self.repo.base_get(k).await.map_err(repo_err)?;
+                        versions_of(k, b.as_ref())
+                    }
+                    None => 0,
+                },
             },
             key: removed.or(main),
         })
@@ -379,15 +408,20 @@ impl Engine {
         (plain && dir.starts_with(&root) && dir.is_dir()).then_some(dir)
     }
 
-    /// O arquivo de uma chave, exista ou não: o mapa da biblioteca diz onde
-    /// ele fica, sem ler o disco (a chave já é a que a passada deu a ele).
-    pub(super) async fn file_for(&self, key: &str) -> Result<SaveFile, SyncError> {
-        let library = local::library(&self.roms, &self.dirs.saves, &self.dirs.system)
-            .await
-            .map_err(|e| failed(format!("saves locais: {e}")))?;
-        library
+    /// O mapa da biblioteca e o arquivo de uma chave, exista ou não, sem ler o
+    /// disco (a chave já é a que a passada deu a ele).
+    pub(super) async fn library_and_file_for(
+        &self,
+        key: &str,
+    ) -> Result<(LocalSaves, SaveFile), SyncError> {
+        let library =
+            local::library_with_db(&self.db, &self.roms, &self.dirs.saves, &self.dirs.system)
+                .await
+                .map_err(|e| failed(format!("saves locais: {e}")))?;
+        let file = library
             .slot_for_key(key)
-            .ok_or_else(|| failed(format!("{}: arquivo fora da biblioteca", log_tag(key))))
+            .ok_or_else(|| failed(format!("{}: arquivo fora da biblioteca", log_tag(key))))?;
+        Ok((library, file))
     }
 
     /// Depois de resolver ou restaurar: a página relê (a contagem de
