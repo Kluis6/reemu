@@ -707,6 +707,25 @@ impl Alvanista {
         let url = self.store().mirror_get().await.ok().flatten()?.profile_url;
         is_site_url(&url).then_some(url)
     }
+
+    pub(crate) async fn profile_checkins(
+        &self,
+        page: u32,
+    ) -> Result<(String, serde_json::Value), String> {
+        if !self.has_session().await {
+            return Err("no_account".into());
+        }
+        let mirror = self.store().mirror_get().await?.ok_or("no_account")?;
+        if mirror.id.trim().is_empty() {
+            return Err("no_account".into());
+        }
+        let data = self
+            .client
+            .public_checkins(&mirror.id, page)
+            .await
+            .map_err(|_| "offline")?;
+        Ok((mirror.id, data))
+    }
 }
 
 /// `true` só para uma página do site do Alvanista (mesmo esquema, host e
@@ -872,6 +891,8 @@ fn site_page_url(page: &str) -> Option<String> {
         "apps" => "/settings/apps",
         "sync" => "/sync",
         "plans" => "/plans",
+        "collection" => "/collection",
+        "checkins" => "/checkins",
         _ => return None,
     };
     Some(format!("{}{path}", config::base_urls().0))
@@ -885,6 +906,13 @@ pub async fn alvanista_open_site(page: String) -> Result<(), String> {
         log::warn!("alvanista: não abriu a página do site: {e}");
         "failed".to_owned()
     })
+}
+
+#[tauri::command]
+pub async fn alvanista_open_game(game_id: String) -> Result<(), String> {
+    let id = uuid::Uuid::parse_str(&game_id).map_err(|_| "invalid_request")?;
+    let url = format!("{}/games/{id}", config::base_urls().0);
+    open_in_browser(&url).map_err(|_| "failed".into())
 }
 
 fn valid_user_slug(raw: &str) -> Option<&str> {

@@ -635,7 +635,9 @@ export const alvanistaDisconnect = () => invoke<void>('alvanista_disconnect')
 export const alvanistaOpenProfile = () => invoke<void>('alvanista_open_profile')
 /** Abre uma página do site do Alvanista: editar perfil, apps conectados, os
  *  aparelhos do sync ou os planos. */
-export const alvanistaOpenSite = (page: 'edit' | 'apps' | 'sync' | 'plans') => invoke<void>('alvanista_open_site', { page })
+export const alvanistaOpenSite = (page: 'edit' | 'apps' | 'sync' | 'plans' | 'collection' | 'checkins') =>
+  invoke<void>('alvanista_open_site', { page })
+export const alvanistaOpenGame = (gameId: string) => invoke<void>('alvanista_open_game', { gameId })
 /** Abre o perfil público de um Gamer conectado no navegador do sistema. */
 export const alvanistaOpenUser = (username: string) =>
   invoke<void>('alvanista_open_user', { username })
@@ -701,6 +703,18 @@ export interface PartnerAchievements {
 export const alvanistaFriends = () => invoke<PartnerFriend[]>('alvanista_friends')
 export const alvanistaAchievements = () =>
   invoke<PartnerAchievements>('alvanista_achievements')
+
+export interface AlvanistaProfileCheckin {
+  id: string
+  gameId: string | null
+  title: string | null
+  coverUrl: string | null
+  status: string | null
+  createdAt: string | null
+}
+
+export const alvanistaProfileCheckins = (page: number) =>
+  invoke<{ items: AlvanistaProfileCheckin[]; nextPage: number | null }>('alvanista_profile_checkins', { page })
 /** Resultado da renovação que o app faz sozinho ao abrir (evento do Rust). */
 export async function onAlvanistaStatus(cb: (st: AlvanistaStatus) => void): Promise<() => void> {
   if (!inTauri) return () => {}

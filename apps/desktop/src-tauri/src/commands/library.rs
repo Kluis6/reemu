@@ -34,6 +34,10 @@ pub struct RomDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, ts(optional))]
     pub user_title: Option<String>,
+    /// Identificador confirmado no catálogo, inclusive quando a ROM foi renomeada.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub game_uuid: Option<String>,
     /// Chave canônica para agrupar múltiplas ROMs regionais do mesmo jogo na
     /// mesma plataforma.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -233,6 +237,7 @@ async fn list_roms_from_pool(pool: &db::Db) -> Result<Vec<RomDto>, AppError> {
                 boxart,
                 title,
                 user_title: r.user_title,
+                game_uuid: meta.and_then(|m| m.game_uuid.clone()),
                 group_key,
                 clean_title,
                 region,
@@ -692,6 +697,8 @@ mod tests {
                 .upsert_metadata(&GameMetadata {
                     rom_id: id.into(),
                     title: title.into(),
+                    game_uuid: (id == "r_user")
+                        .then(|| "11111111-0000-0000-0000-000000000001".into()),
                     provider_source: Some("alvanista".into()),
                     ..Default::default()
                 })
@@ -704,6 +711,10 @@ mod tests {
         assert_eq!(by_id("r_stem").title, "smw_dump");
         assert_eq!(by_id("r_cat").title, "Chrono Trigger");
         assert_eq!(by_id("r_user").title, "Meu EarthBound");
+        assert_eq!(
+            by_id("r_user").game_uuid.as_deref(),
+            Some("11111111-0000-0000-0000-000000000001")
+        );
         assert_eq!(
             by_id("r_user").user_title.as_deref(),
             Some("Meu EarthBound")

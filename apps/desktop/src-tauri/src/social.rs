@@ -307,6 +307,87 @@ pub async fn alvanista_achievements(app: AppHandle) -> Result<PartnerAchievement
     fetch_achievements(&alva).await
 }
 
+#[derive(Deserialize)]
+struct CheckinsWire {
+    items: Vec<CheckinWire>,
+    page: u32,
+    page_size: u32,
+    total: u64,
+}
+
+#[derive(Deserialize)]
+struct CheckinWire {
+    id: String,
+    actor_id: String,
+    game_id: Option<String>,
+    game_title: Option<String>,
+    game_cover_url: Option<String>,
+    checkin_status: Option<String>,
+    created_at: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileCheckin {
+    id: String,
+    game_id: Option<String>,
+    title: Option<String>,
+    cover_url: Option<String>,
+    status: Option<String>,
+    created_at: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileCheckinsPage {
+    items: Vec<ProfileCheckin>,
+    next_page: Option<u32>,
+}
+
+fn profile_checkins_page(
+    author_id: &str,
+    requested_page: u32,
+    payload: serde_json::Value,
+) -> Result<ProfileCheckinsPage, String> {
+    let data: CheckinsWire = serde_json::from_value(payload).map_err(|_| "failed")?;
+    if data.page != requested_page || data.page_size == 0 {
+        return Err("failed".into());
+    }
+    let next_page = (!data.items.is_empty()
+        && u64::from(data.page) * u64::from(data.page_size) < data.total)
+        .then(|| data.page.checked_add(1))
+        .flatten();
+    Ok(ProfileCheckinsPage {
+        items: data
+            .items
+            .into_iter()
+            .filter(|item| item.actor_id == author_id)
+            .map(|item| ProfileCheckin {
+                id: item.id,
+                game_id: item.game_id,
+                title: item.game_title,
+                cover_url: item.game_cover_url,
+                status: item.checkin_status,
+                created_at: item.created_at,
+            })
+            .collect(),
+        next_page,
+    })
+}
+
+#[tauri::command]
+pub async fn alvanista_profile_checkins(
+    app: AppHandle,
+    page: u32,
+) -> Result<ProfileCheckinsPage, String> {
+    if page == 0 {
+        return Err("invalid_request".into());
+    }
+    let alva = alva_state(&app)?;
+    let (author_id, payload) = alva.profile_checkins(page).await?;
+    profile_checkins_page(&author_id, page, payload)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -315,6 +396,23 @@ mod tests {
     use std::io::{Read, Write};
     use std::net::TcpListener;
     use std::time::Duration;
+
+    #[test]
+    fn profile_checkins_only_return_the_linked_author_and_keep_pagination() {
+        let payload = serde_json::json!({
+            "items": [
+                { "id": "1", "actor_id": "alva_1", "game_title": "A", "checkin_status": "finished" },
+                { "id": "2", "actor_id": "alva_2", "game_title": "B" }
+            ],
+            "page": 2, "page_size": 2, "total": 5
+        });
+        assert!(profile_checkins_page("alva_1", 1, payload.clone()).is_err());
+        let page = profile_checkins_page("alva_1", 2, payload).unwrap();
+        assert_eq!(page.next_page, Some(3));
+        assert_eq!(page.items.len(), 1);
+        assert_eq!(page.items[0].status.as_deref(), Some("finished"));
+        assert_eq!(page.items[0].title.as_deref(), Some("A"));
+    }
 
     fn spawn_fake_partner(reply: impl Fn(&str) -> (u16, String) + Send + 'static) -> String {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();

@@ -114,6 +114,27 @@ impl Client {
         &self.store
     }
 
+    pub(crate) async fn public_checkins(
+        &self,
+        author_id: &str,
+        page: u32,
+    ) -> Result<serde_json::Value> {
+        self.http
+            .get(format!("{}/api/v1/checkins", self.api))
+            .query(&[
+                ("author_id", author_id),
+                ("page", &page.to_string()),
+                ("page_size", "30"),
+            ])
+            .send()
+            .await
+            .and_then(reqwest::Response::error_for_status)
+            .map_err(|err| ClientError::Transient(err.to_string()))?
+            .json()
+            .await
+            .map_err(|err| ClientError::Transient(err.to_string()))
+    }
+
     #[cfg(test)]
     /// Troca o `code` do callback pelos tokens. Não grava: quem chama grava
     /// com `store().save_tokens` quando for usar.

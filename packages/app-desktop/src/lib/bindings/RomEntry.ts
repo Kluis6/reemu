@@ -35,6 +35,10 @@ contentExtension?: string,
  */
 userTitle?: string, 
 /**
+ * Identificador confirmado no catálogo, inclusive quando a ROM foi renomeada.
+ */
+gameUuid?: string, 
+/**
  * Chave canônica para agrupar múltiplas ROMs regionais do mesmo jogo na
  * mesma plataforma.
  */
