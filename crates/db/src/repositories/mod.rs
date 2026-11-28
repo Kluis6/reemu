@@ -27,7 +27,7 @@ mod system_core_repo;
 mod system_hotkeys_repo;
 mod video_config_repo;
 
-pub use alvanista_repo::AlvanistaRepo;
+pub use alvanista_repo::{AlvanistaHomeFeedRow, AlvanistaRepo};
 pub use aspect_repo::{AspectAssignments, AspectRepo};
 pub use audio_config_repo::AudioConfigRepo;
 pub use cheats_repo::CheatsRepo;

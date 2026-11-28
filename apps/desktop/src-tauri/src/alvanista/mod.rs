@@ -17,6 +17,7 @@
 
 pub mod client;
 pub mod config;
+pub mod home;
 pub mod loopback;
 pub mod pkce;
 pub mod store;
@@ -107,6 +108,8 @@ pub struct Alvanista {
     generation: Arc<AtomicU64>,
     /// O aparelho do cloud save desta máquina: sai junto com a conta.
     sync: OnceLock<Arc<SyncService>>,
+    /// Evita duas buscas simultâneas de `/api/partner/v1/home`.
+    home_lock: tokio::sync::Mutex<()>,
 }
 
 impl Alvanista {
@@ -115,6 +118,7 @@ impl Alvanista {
             client,
             generation: Arc::new(AtomicU64::new(0)),
             sync: OnceLock::new(),
+            home_lock: tokio::sync::Mutex::new(()),
         }
     }
 
@@ -729,19 +733,23 @@ impl Alvanista {
 }
 
 /// `true` só para uma página do site do Alvanista (mesmo esquema, host e
-/// porta; em release, sempre `https://www.alvanista.com`).
-fn is_site_url(url: &str) -> bool {
-    let (Ok(parsed), Ok(site)) = (
-        url::Url::parse(url),
-        url::Url::parse(&config::base_urls().0),
-    ) else {
+/// porta; em release, sempre `https://www.alvanista.com` ou `https://alvanista.com`).
+pub(crate) fn is_site_url_against(url: &str, site_base: &str) -> bool {
+    let (Ok(parsed), Ok(site)) = (url::Url::parse(url), url::Url::parse(site_base)) else {
         return false;
     };
+    let same_host = parsed.host_str() == site.host_str()
+        || (site.host_str() == Some("www.alvanista.com")
+            && parsed.host_str() == Some("alvanista.com"));
     parsed.scheme() == site.scheme()
         && parsed.username().is_empty()
         && parsed.password().is_none()
-        && parsed.host_str() == site.host_str()
+        && same_host
         && parsed.port() == site.port()
+}
+
+pub(crate) fn is_site_url(url: &str) -> bool {
+    is_site_url_against(url, &config::base_urls().0)
 }
 
 /// Abre `url` no navegador do sistema, e só se for do site do Alvanista: a
@@ -772,6 +780,7 @@ pub fn refresh_on_start(app: &AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         refresh_profile_now(&app).await;
+        home::refresh_home_on_start(&app).await;
         crate::catalog::spawn_on_start(app.clone());
         // O cloud save começa depois: a primeira passada usa o par que a
         // renovação deixou.

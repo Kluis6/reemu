@@ -63,6 +63,32 @@ pub struct Entitlements {
     pub save_sync: bool,
 }
 
+/// Resposta pública de `GET /api/partner/v1/home?lang=<lang>`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct HomeFeedResponseWire {
+    #[serde(default)]
+    pub items: Vec<HomeFeedItemWire>,
+}
+
+/// Item bruto devolvido pelo endpoint público de novidades da tela inicial.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct HomeFeedItemWire {
+    pub id: String,
+    pub kind: String,
+    pub title: String,
+    #[serde(default)]
+    pub summary: String,
+    #[serde(default)]
+    pub image_url: Option<String>,
+    pub url: String,
+    #[serde(default)]
+    pub starts_at: Option<String>,
+    #[serde(default)]
+    pub ends_at: Option<String>,
+    #[serde(default)]
+    pub sponsored: bool,
+}
+
 #[derive(Deserialize)]
 struct TokenResponse {
     access_token: String,
@@ -584,6 +610,34 @@ impl Client {
             classify(status, error_code(resp).await)
         };
         Err(MeError::Failed(err))
+    }
+
+    /// Novidades públicas da tela inicial (`GET /api/partner/v1/home?lang=<lang>`).
+    /// Endpoint público: não envia token nem lê o chaveiro.
+    pub async fn get_home_feed(&self, lang: &str) -> Result<Vec<HomeFeedItemWire>> {
+        let resp = self
+            .http
+            .get(format!("{}/api/partner/v1/home", self.api))
+            .query(&[("lang", lang)])
+            .send()
+            .await
+            .map_err(transport)?;
+        let status = resp.status();
+        log::debug!("alvanista: /home ({lang}) respondeu {}", status.as_u16());
+        if status.is_success() {
+            let body: HomeFeedResponseWire = resp
+                .json()
+                .await
+                .map_err(|_| ClientError::Transient("resposta do /home ilegível".into()))?;
+            return Ok(body.items);
+        }
+        if status == StatusCode::NOT_FOUND
+            || status == StatusCode::TOO_MANY_REQUESTS
+            || status.is_server_error()
+        {
+            return Err(ClientError::Transient(format!("{}", status.as_u16())));
+        }
+        Err(classify(status, error_code(resp).await))
     }
 }
 

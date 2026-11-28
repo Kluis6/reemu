@@ -17,13 +17,15 @@ import { AlvanistaButton } from '../../components/AlvanistaButton'
 import { LoadingState } from '../../components/EmptyState'
 import { ProfileAvatar } from '../../components/ProfileAvatar'
 import { ProfileForm } from '../../components/ProfileForm'
+import { BlockGroup, ToggleBlock } from '../../components/SettingBlock'
+import { useAlvanistaHome, useSetAlvanistaHomeEnabled } from '../../hooks/useAlvanistaHome'
 import { ALVANISTA_CACHED_KEY } from '../../hooks/useEffectiveProfile'
 import {
   ALVANISTA_STATUS_KEY,
   DISCONNECTED,
   useAlvanistaStatusSync,
 } from '../../hooks/useAlvanistaStatusSync'
-import { sysToast } from '../../lib/toast'
+import { errorToast, sysToast } from '../../lib/toast'
 import { useAlvanistaConnect, useAlvanistaDisconnect } from '../../hooks/useAlvanistaConnect'
 import {
   alvanistaCachedStatus,
@@ -82,10 +84,11 @@ const useStyles = makeStyles({
  * desconectar.
  */
 export function SettingsProfile() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const s = useStyles()
   const qc = useQueryClient()
   const push = useToastStore((st) => st.push)
+  const uiLang = i18n.resolvedLanguage ?? i18n.language
   const profile = useQuery({ queryKey: ['profile'], queryFn: getProfile, retry: false })
   // Primeiro o que está no aparelho (instantâneo); o status completo fala
   // com o Alvanista (até ~15 s) e substitui a tela quando chega.
@@ -95,6 +98,8 @@ export function SettingsProfile() {
     retry: false,
   })
   const alva = useQuery({ queryKey: ALVANISTA_STATUS_KEY, queryFn: alvanistaStatus, retry: false })
+  const homeHighlights = useAlvanistaHome(uiLang)
+  const setHomeHighlights = useSetAlvanistaHomeEnabled()
   const { connect, cancel, connecting, outcome } = useAlvanistaConnect()
   const { disconnect, disconnecting } = useAlvanistaDisconnect()
 
@@ -103,6 +108,22 @@ export function SettingsProfile() {
   useAlvanistaStatusSync(status, alva.data, cached.data)
 
   if (profile.isLoading || (cached.isLoading && alva.isLoading)) return <LoadingState />
+
+  const homeToggle = homeHighlights.data ? (
+    <BlockGroup>
+      <ToggleBlock
+        label={t('alvanista.homeHighlightsToggle')}
+        description={t('alvanista.homeHighlightsHint')}
+        checked={homeHighlights.data.enabled}
+        busy={setHomeHighlights.isPending}
+        onChange={(on) =>
+          setHomeHighlights.mutate(on, {
+            onError: (e) => push(errorToast(e, 'saveChanges')),
+          })
+        }
+      />
+    </BlockGroup>
+  ) : null
 
   if (status.connected) {
     return (
@@ -151,6 +172,7 @@ export function SettingsProfile() {
             {t('alvanista.disconnect')}
           </Button>
         </div>
+        {homeToggle}
       </div>
     )
   }
@@ -202,6 +224,7 @@ export function SettingsProfile() {
           push(sysToast(t('profile.updated'), 'Success'))
         }}
       />
+      {available && homeToggle}
     </div>
   )
 }

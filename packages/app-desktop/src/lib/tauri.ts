@@ -722,6 +722,36 @@ export async function onAlvanistaStatus(cb: (st: AlvanistaStatus) => void): Prom
   return listen<AlvanistaStatus>('alvanista-status', (e) => cb(e.payload))
 }
 
+export type AlvanistaHomeItemKind = 'article' | 'review'
+
+export interface AlvanistaHomeItem {
+  id: string
+  kind: AlvanistaHomeItemKind | string
+  title: string
+  summary: string
+  imageUrl: string | null
+}
+
+export interface AlvanistaHomeView {
+  enabled: boolean
+  items: AlvanistaHomeItem[]
+}
+
+export const alvanistaHomeHighlights = (lang: string = i18n.language) =>
+  invoke<AlvanistaHomeView>('alvanista_home_highlights', { lang })
+
+export const alvanistaSetHomeHighlightsEnabled = (enabled: boolean) =>
+  invoke<void>('alvanista_set_home_highlights_enabled', { enabled })
+
+export const alvanistaOpenHomeItem = (id: string) =>
+  invoke<void>('alvanista_open_home_item', { id })
+
+export async function onAlvanistaHome(cb: (view: AlvanistaHomeView) => void): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<AlvanistaHomeView>('alvanista-home', (e) => cb(e.payload))
+}
+
 // --- catálogo de jogos do Alvanista (D140, D147) ------------------------
 
 export type { CatalogSearchGame, CatalogStatus }

@@ -537,6 +537,8 @@ const ptBR = {
     offlineBadge: 'Sem conexão: mostrando o último perfil salvo',
     ended: 'Conexão com o Alvanista encerrada',
     unknownUser: 'Conta do Alvanista',
+    homeHighlightsToggle: 'Mostrar destaques do Alvanista na tela inicial',
+    homeHighlightsHint: 'Inclui convite ou atividade do seu perfil, além de até 2 artigos e reviews no carrossel da tela inicial.',
   },
   sync: {
     explain: "Conecte sua conta do Alvanista para guardar os saves desta máquina na sua conta.",
@@ -817,6 +819,15 @@ const ptBR = {
     recentSub: 'O que entrou por último na biblioteca',
     emptyPlatform: 'Nada nessa plataforma',
     emptyPlatformHint: 'Ajuste a busca ou volte pra biblioteca.',
+    alvanista: {
+      kicker: 'Alvanista',
+      inviteSub: 'Conecte sua conta para sincronizar saves, conquistas e seu perfil.',
+      playingNowKicker: 'Jogando agora',
+      recentBadgeKicker: 'Nova badge no Alvanista',
+      openProfileSub: 'Ver no seu perfil',
+      articleKicker: 'Artigo no Alvanista',
+      reviewKicker: 'Review no Alvanista',
+    },
   },
   play: {
     quickSaved: 'QuickSave gravado.',
