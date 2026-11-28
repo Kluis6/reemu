@@ -7,7 +7,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use domain::audio::{AudioConfig, AudioSink};
 use ringbuf::traits::{Consumer, Observer, Producer, Split};
 use ringbuf::{HeapCons, HeapProd, HeapRb};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -24,6 +24,7 @@ pub enum AudioError {
 pub struct CpalAudioSink {
     stream: cpal::Stream,
     producer: HeapProd<f32>,
+    clear_pending: Arc<AtomicBool>,
     capacity: usize,
     device_rate: u32,
     rate_control: RateControl,
@@ -107,11 +108,16 @@ impl CpalAudioSink {
         let debug = std::env::var_os("REEMU_AUDIO_DEBUG").is_some();
         let starved = Arc::new(AtomicU64::new(0));
         let cb_starved = Arc::clone(&starved);
+        let clear_pending = Arc::new(AtomicBool::new(false));
+        let cb_clear = Arc::clone(&clear_pending);
 
         let stream = device
             .build_output_stream(
                 stream_config,
                 move |data: &mut [f32], _: &_| {
+                    if cb_clear.swap(false, Ordering::Acquire) {
+                        consumer.clear();
+                    }
                     let got = consumer.pop_slice(data);
                     data[got..].fill(0.0); // underrun -> silêncio
                     if debug && got < data.len() {
@@ -134,6 +140,7 @@ impl CpalAudioSink {
         Ok(Self {
             stream,
             producer,
+            clear_pending,
             capacity,
             device_rate,
             rate_control: RateControl::new(config.rate_control_delta, config.rate_control_enabled),
@@ -242,6 +249,12 @@ impl AudioSink for CpalAudioSink {
 
     fn resume(&mut self) {
         let _ = self.stream.play();
+    }
+
+    fn clear(&mut self) {
+        self.resampler.input.clear();
+        self.resampler.pos = 0.0;
+        self.clear_pending.store(true, Ordering::Release);
     }
 
     fn set_output_device(&mut self, device_id: Option<&str>) -> Result<(), String> {

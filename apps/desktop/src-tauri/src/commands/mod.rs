@@ -56,6 +56,8 @@ pub struct AppState {
     /// `rom_id` do jogo carregado agora (o path vai pro core, o id vai pro DB).
     /// `None` quando ocioso. Usado pelo QuickSave/QuickLoad das hotkeys.
     pub current_rom: Mutex<Option<String>>,
+    /// `true` enquanto o jogador mantém o atalho de rewind segurado na partida.
+    pub rewinding_active: std::sync::atomic::AtomicBool,
     /// Tempo de jogo ainda não gravado da ROM atual (`play_clock.rs`).
     pub play_clock: Mutex<crate::play_clock::PlayClock>,
     /// Contexto GPU pro processamento de frame (etapa 04). `None` = sem
@@ -185,6 +187,7 @@ impl AppState {
             vk_reattach: Mutex::new(None),
             loading_game: std::sync::atomic::AtomicBool::new(false),
             active_shader: Mutex::new(None),
+            rewinding_active: std::sync::atomic::AtomicBool::new(false),
         }
     }
 }
@@ -201,10 +204,77 @@ struct HotkeyAction {
     message: String,
 }
 
+#[derive(Serialize, Clone)]
+struct RewindStateEvent {
+    active: bool,
+}
+
+pub(crate) fn stop_rewinding_if_active<R: tauri::Runtime>(app: &AppHandle<R>) {
+    let state = app.state::<AppState>();
+    if state
+        .rewinding_active
+        .swap(false, std::sync::atomic::Ordering::AcqRel)
+    {
+        state.session.set_rewinding_nonblocking(false);
+        let _ = app.emit("rewind-state", RewindStateEvent { active: false });
+    }
+}
+
+pub(crate) async fn apply_rewind_for_session(
+    app: &AppHandle,
+    hardcore_active: bool,
+    rom_id: Option<&str>,
+    core_id: &str,
+) {
+    stop_rewinding_if_active(app);
+    let state = app.state::<AppState>();
+    let (user_enabled, budget_mb) = app
+        .try_state::<crate::system::SystemState>()
+        .map(|s| s.rewind_prefs())
+        .unwrap_or((false, domain::rewind::DEFAULT_REWIND_BUDGET_MB));
+    let system_id = match (state.db.clone(), rom_id) {
+        (Some(pool), Some(rid)) => db::RomsRepo::new(pool)
+            .get(rid)
+            .await
+            .ok()
+            .flatten()
+            .map(|r| r.system_id)
+            .unwrap_or_default(),
+        _ => String::new(),
+    };
+    let stride = domain::rewind::rewind_stride_for(&system_id, core_id);
+    let effective = user_enabled && !hardcore_active && stride.is_some();
+    let budget_bytes = (budget_mb as usize) * 1024 * 1024;
+    let stride_val = stride.unwrap_or(0);
+    let session = Arc::clone(&state.session);
+    let _ = tauri::async_runtime::spawn_blocking(move || {
+        session.configure_rewind(effective, budget_bytes, stride_val);
+    })
+    .await;
+}
+
+pub(crate) async fn reapply_rewind_if_running(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let Some(core_id) = state.session.loaded_core() else {
+        return;
+    };
+    let rom_id = state
+        .current_rom
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .clone();
+    let hardcore = app
+        .try_state::<crate::ra::RaState>()
+        .map(|r| r.is_hardcore_active())
+        .unwrap_or(false);
+    apply_rewind_for_session(app, hardcore, rom_id.as_deref(), &core_id).await;
+}
+
 /// Resolve as hotkeys de sistema a partir do conjunto segurado (teclado +
-/// gamepad) e dispara a ação **uma vez por aperto**. Chamado a cada frame
-/// pelo loop de eventos, antes de qualquer roteamento pro jogo (prioridade).
+/// gamepad) e dispara a ação **uma vez por aperto** (exceto `Rewind`, que é de
+/// segurar). Chamado a cada frame pelo loop de eventos e em `input_key`.
 pub(crate) fn poll_hotkeys<R: tauri::Runtime>(app: &AppHandle<R>) {
+    use domain::focus::{FocusManager, InputFocus};
     use domain::hotkeys::HotkeyResolver;
     let state = app.state::<AppState>();
     let held = input_desktop::held::snapshot();
@@ -213,6 +283,36 @@ pub(crate) fn poll_hotkeys<R: tauri::Runtime>(app: &AppHandle<R>) {
         .lock()
         .unwrap_or_else(|p| p.into_inner())
         .resolve(&held);
+
+    let game_running = state
+        .focus
+        .lock()
+        .map(|f| f.current() == InputFocus::GameFocused)
+        .unwrap_or(false)
+        && matches!(state.session.state(), SessionState::Running);
+    let rewind_enabled = app
+        .try_state::<crate::system::SystemState>()
+        .map(|s| s.rewind_prefs().0)
+        .unwrap_or(false);
+    let hardcore_active = app
+        .try_state::<crate::ra::RaState>()
+        .map(|r| r.is_hardcore_active())
+        .unwrap_or(false);
+    let want_rewind =
+        action == Some(SystemAction::Rewind) && game_running && rewind_enabled && !hardcore_active;
+    let was_rewinding = state
+        .rewinding_active
+        .swap(want_rewind, std::sync::atomic::Ordering::AcqRel);
+    if was_rewinding != want_rewind {
+        state.session.set_rewinding_nonblocking(want_rewind);
+        let _ = app.emit(
+            "rewind-state",
+            RewindStateEvent {
+                active: want_rewind,
+            },
+        );
+    }
+
     {
         let mut last = state.last_hotkey.lock().unwrap_or_else(|p| p.into_inner());
         if action == *last {
@@ -227,6 +327,7 @@ pub(crate) fn poll_hotkeys<R: tauri::Runtime>(app: &AppHandle<R>) {
         }
         SystemAction::QuickSave => spawn_quick_state(app.clone(), true),
         SystemAction::QuickLoad => spawn_quick_state(app.clone(), false),
+        SystemAction::Rewind => {}
         SystemAction::CaptureScreenshot => crate::gamelog::hotkey_capture_screenshot(app.clone()),
         SystemAction::ToggleAudioNote => crate::gamelog::hotkey_toggle_audio_note(app.clone()),
         SystemAction::ToggleVideoRecording => {
@@ -352,6 +453,7 @@ pub(crate) fn focus_str(f: domain::focus::InputFocus) -> &'static str {
 /// pela hotkey de teclado e pelo botão de menu do gamepad.
 pub(crate) fn toggle_and_emit<R: tauri::Runtime>(app: &AppHandle<R>) -> &'static str {
     use domain::focus::{FocusManager, InputFocus};
+    stop_rewinding_if_active(app);
     let state = app.state::<AppState>();
     let now = {
         let mut fc = state.focus.lock().unwrap_or_else(|p| p.into_inner());

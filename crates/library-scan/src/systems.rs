@@ -420,6 +420,86 @@ pub fn libretro_boxart_url(system_id: &str, rom_title: &str) -> Option<String> {
     ))
 }
 
+/// Pastas candidatas em `libretro-database/cht/<Sistema>` para um `system_id`
+/// do ReEmu (levando em conta a extensão da ROM quando um mesmo `system_id`
+/// agrupa duas variantes, como `.wsc` em `wonderswan`, `.ngc` em `ngp` e
+/// `.fds` em `nes`).
+pub fn libretro_cht_systems(system_id: &str, rom_ext: Option<&str>) -> &'static [&'static str] {
+    let ext = rom_ext.unwrap_or_default();
+    match system_id {
+        "nes" if ext.eq_ignore_ascii_case("fds") => &[
+            "Nintendo - Family Computer Disk System",
+            "Nintendo - Nintendo Entertainment System",
+        ],
+        "nes" => &[
+            "Nintendo - Nintendo Entertainment System",
+            "Nintendo - Family Computer Disk System",
+        ],
+        "snes" => &["Nintendo - Super Nintendo Entertainment System"],
+        "gb" => &["Nintendo - Game Boy"],
+        "gbc" => &["Nintendo - Game Boy Color"],
+        "gba" => &["Nintendo - Game Boy Advance"],
+        "n64" => &["Nintendo - Nintendo 64"],
+        "vb" => &["Nintendo - Virtual Boy"],
+        "nds" => &["Nintendo - Nintendo DS"],
+        "pokemini" => &["Nintendo - Pokemon Mini"],
+        "megadrive" => &["Sega - Mega Drive - Genesis"],
+        "mastersystem" => &["Sega - Master System - Mark III"],
+        "gamegear" => &["Sega - Game Gear"],
+        "sega32x" => &["Sega - 32X"],
+        "segacd" => &["Sega - Mega-CD - Sega CD"],
+        "saturn" => &["Sega - Saturn"],
+        "dreamcast" => &["Sega - Dreamcast"],
+        "sg1000" => &["Sega - SG-1000"],
+        "psx" => &["Sony - PlayStation"],
+        "ps2" => &["Sony - PlayStation 2"],
+        "psp" => &["Sony - PlayStation Portable"],
+        "pcengine" => &["NEC - PC Engine - TurboGrafx 16"],
+        "pcenginecd" => &["NEC - PC Engine CD - TurboGrafx-CD"],
+        "supergrafx" => &["NEC - PC Engine SuperGrafx"],
+        "pcfx" => &["NEC - PC-FX"],
+        "atari2600" => &["Atari - 2600"],
+        "atari5200" => &["Atari - 5200"],
+        "atari7800" => &["Atari - 7800"],
+        "atari8bit" => &["Atari - 8-bit", "Atari - 8-bit Family"],
+        "atarist" => &["Atari - ST"],
+        "jaguar" => &["Atari - Jaguar"],
+        "lynx" => &["Atari - Lynx"],
+        "wonderswan" if ext.eq_ignore_ascii_case("wsc") => {
+            &["Bandai - WonderSwan Color", "Bandai - WonderSwan"]
+        }
+        "wonderswan" => &["Bandai - WonderSwan", "Bandai - WonderSwan Color"],
+        "ngp" if ext.eq_ignore_ascii_case("ngc") => {
+            &["SNK - Neo Geo Pocket Color", "SNK - Neo Geo Pocket"]
+        }
+        "ngp" => &["SNK - Neo Geo Pocket", "SNK - Neo Geo Pocket Color"],
+        "neogeocd" => &["SNK - Neo Geo CD"],
+        "coleco" => &["Coleco - ColecoVision"],
+        "intellivision" => &["Mattel - Intellivision"],
+        "3do" => &["The 3DO Company - 3DO"],
+        "cdi" => &["Philips - CD-i"],
+        "supervision" => &["Watara - Supervision"],
+        "msx" => &["Microsoft - MSX", "Microsoft - MSX2"],
+        "vectrex" => &["GCE - Vectrex"],
+        "c64" => &["Commodore - 64"],
+        "amiga" => &["Commodore - Amiga"],
+        "zxspectrum" => &["Sinclair - ZX Spectrum"],
+        "amstradcpc" => &["Amstrad - CPC"],
+        "dos" => &["DOS"],
+        "arcade" => &["FBNeo - Arcade Games", "MAME"],
+        _ => &[],
+    }
+}
+
+/// Codifica segmento de URL de `libretro-database` (`cht/<Sistema>/<Jogo>.cht`).
+pub fn libretro_cht_url(system_folder: &str, game_stem: &str) -> String {
+    format!(
+        "https://raw.githubusercontent.com/libretro/libretro-database/master/cht/{}/{}.cht",
+        percent_encode(system_folder),
+        percent_encode(game_stem),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

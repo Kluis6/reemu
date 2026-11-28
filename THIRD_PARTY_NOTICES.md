@@ -78,6 +78,11 @@ FB Alpha/FBNeo e versões antigas do MAME) "may not be sold, nor may they be
 used in a commercial product or activity without copyright holders'
 approval" (<https://docs.libretro.com/development/licenses/>).
 
+Os arquivos de cheats (`.cht`) são baixados sob demanda, sem modificação e sem
+inclusão no instalador, do repositório `libretro-database`
+(<https://github.com/libretro/libretro-database>, pasta `cht/`), distribuído
+sob a licença **CC-BY-SA 4.0** (<https://creativecommons.org/licenses/by-sa/4.0/>).
+
 ## AMD FidelityFX CAS (`ffx_cas.h`)
 
 Origem: <https://github.com/GPUOpen-Effects/FidelityFX-CAS/blob/master/ffx-cas/ffx_cas.h>.

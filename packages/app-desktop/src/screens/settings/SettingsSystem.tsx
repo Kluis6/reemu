@@ -27,15 +27,19 @@ import {
   setLanguagePreference,
   type LanguagePreference,
 } from "../../i18n";
+import { RA_STATUS_KEY } from "../../hooks/useRetroAchievements";
 import {
   exportDiagnostics,
   getHardwareInfo,
   listInstalledCores,
   getVideoConfig,
   updateVideoConfig,
+  getRewindSettings,
   getSystemSettings,
+  raStatus,
   setAutostart,
   setMinimizeToTray,
+  setRewindSettings,
   setStartFullscreen,
   type SystemSettings,
 } from "../../lib/tauri";
@@ -211,6 +215,25 @@ export function SettingsSystem({
     onSuccess: () => qc.invalidateQueries({ queryKey: ['video-config'] }),
     onError: (e) => push(errorToast(e, 'saveVideoConfig')),
   })
+  const rewind = useQuery({
+    queryKey: ["rewind-settings"],
+    queryFn: getRewindSettings,
+    retry: false,
+  });
+  const ra = useQuery({
+    queryKey: RA_STATUS_KEY,
+    queryFn: raStatus,
+    retry: false,
+  });
+  const hardcoreOn = Boolean(
+    ra.data?.connected && ra.data?.enabled && ra.data?.hardcore,
+  );
+  const saveRewind = useMutation({
+    mutationFn: ({ enabled, budgetMb }: { enabled: boolean; budgetMb: number }) =>
+      setRewindSettings(enabled, budgetMb),
+    onSuccess: (next) => qc.setQueryData(["rewind-settings"], next),
+    onError: (e) => push(errorToast(e, "saveRewindSettings")),
+  });
   const save = useMutation({
     mutationFn: ({ key, value }: { key: Key; value: boolean }) =>
       SAVE[key](value),
@@ -373,6 +396,47 @@ export function SettingsSystem({
               onChange={(checked) => setIntegerScaling.mutate(checked)}
             />
             <HdrSettings />
+          </BlockGroup>
+
+          <BlockGroup title={t("system.rewind.title")}>
+            {hardcoreOn && (
+              <MessageBar intent="warning" style={{ gridColumn: "1 / -1" }}>
+                <MessageBarBody>{t("system.rewind.hardcoreNotice")}</MessageBarBody>
+              </MessageBar>
+            )}
+            <ToggleBlock
+              label={t("system.rewind.enabled")}
+              description={t("system.rewind.enabledHint")}
+              checked={!hardcoreOn && (rewind.data?.enabled ?? false)}
+              disabled={hardcoreOn || rewind.isLoading || saveRewind.isPending}
+              onChange={(enabled) =>
+                saveRewind.mutate({
+                  enabled,
+                  budgetMb: rewind.data?.budgetMb ?? 128,
+                })
+              }
+            />
+            <SelectBlock
+              label={t("system.rewind.budget")}
+              description={t("system.rewind.budgetHint")}
+              value={String(rewind.data?.budgetMb ?? 128)}
+              options={[64, 128, 256, 512].map((mb) => ({
+                value: String(mb),
+                label: t("system.rewind.budgetOption", { mb }),
+              }))}
+              disabled={
+                hardcoreOn ||
+                rewind.isLoading ||
+                !(rewind.data?.enabled ?? false) ||
+                saveRewind.isPending
+              }
+              onChange={(value) =>
+                saveRewind.mutate({
+                  enabled: rewind.data?.enabled ?? false,
+                  budgetMb: Number(value),
+                })
+              }
+            />
           </BlockGroup>
         </div>
       )}

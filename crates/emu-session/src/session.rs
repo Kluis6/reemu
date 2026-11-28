@@ -86,6 +86,9 @@ enum Command {
     GetCoreOptions(Sender<(Vec<CoreOptionDefinition>, HashMap<String, String>)>),
     SetCoreOption(String, String, Sender<bool>),
     SetCheats(Vec<domain::cheats::CheatCode>, Sender<()>),
+    ConfigureRewind(bool, usize, u32, Sender<()>),
+    SetRewinding(bool, Sender<()>),
+    ClearRewind(Sender<()>),
     Shutdown,
 }
 
@@ -207,6 +210,8 @@ struct Shared {
     ra_gen: AtomicU64,
     /// Último tick `idle()` do `rcheevos` quando um core Vulkan in-process está pausado.
     ra_last_idle: Mutex<Option<Instant>>,
+    /// `true` enquanto o atalho de rewind está segurado na partida atual.
+    rewinding: AtomicBool,
 }
 
 type VkJob = Box<dyn FnOnce() + Send>;
@@ -364,6 +369,7 @@ impl EmuSession {
             ra_sink: Mutex::new(None),
             ra_gen: AtomicU64::new(0),
             ra_last_idle: Mutex::new(None),
+            rewinding: AtomicBool::new(false),
         });
 
         let gamepad_thread = cfg.enable_gamepad.then(|| {
@@ -757,6 +763,31 @@ impl EmuSession {
     /// Troca a lista de cheats do jogo carregado (doc 17). Sem jogo, nada.
     pub fn set_cheats(&self, cheats: Vec<domain::cheats::CheatCode>) {
         let _ = self.call(|reply| Command::SetCheats(cheats, reply));
+    }
+
+    /// Configura o buffer circular de rewind em RAM da partida atual (doc 17, fase 3).
+    pub fn configure_rewind(&self, enabled: bool, budget_bytes: usize, stride: u32) {
+        let _ = self.call(|reply| Command::ConfigureRewind(enabled, budget_bytes, stride, reply));
+    }
+
+    /// Ativa ou encerra o retrocesso em tempo real, silenciando e limpando o áudio.
+    pub fn set_rewinding(&self, active: bool) {
+        let _ = self.call(|reply| Command::SetRewinding(active, reply));
+    }
+
+    /// Versão não-bloqueante para o loop de atalhos (preserva ordem FIFO no canal).
+    pub fn set_rewinding_nonblocking(&self, active: bool) {
+        let (rtx, _rrx) = mpsc::channel();
+        let _ = self.send(Command::SetRewinding(active, rtx));
+    }
+
+    /// Descarta o histórico de rewind em RAM.
+    pub fn clear_rewind(&self) {
+        let _ = self.call(Command::ClearRewind);
+    }
+
+    pub fn is_rewinding(&self) -> bool {
+        self.shared.rewinding.load(Ordering::Acquire)
     }
 
     pub fn state(&self) -> SessionState {
@@ -1477,14 +1508,19 @@ fn handle_event(
         ToParent::AudioBatch {
             samples,
             sample_rate,
-        } => match sink.as_mut() {
-            Some(s) => s.push_samples(&samples, sample_rate),
-            None => shared
-                .audio
-                .lock()
-                .unwrap_or_else(|p| p.into_inner())
-                .extend_from_slice(&samples),
-        },
+        } => {
+            if shared.rewinding.load(Ordering::Acquire) {
+                return;
+            }
+            match sink.as_mut() {
+                Some(s) => s.push_samples(&samples, sample_rate),
+                None => shared
+                    .audio
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .extend_from_slice(&samples),
+            }
+        }
         ToParent::AvInfoChanged { fps, sample_rate } => {
             log::info!(
                 "timing atualizado em runtime: fps={fps:.3} sample_rate={sample_rate:.0} Hz"
@@ -2099,6 +2135,7 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
 
         match cmd {
             Command::Load(id, rom, initial_option_values, reply) => {
+                shared.rewinding.store(false, Ordering::Release);
                 shared.ra_gen.fetch_add(1, Ordering::AcqRel);
                 *shared
                     .loading_core
@@ -2416,6 +2453,7 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 }
             }
             Command::Unload(reply) => {
+                shared.rewinding.store(false, Ordering::Release);
                 shared.ra_gen.fetch_add(1, Ordering::AcqRel);
                 teardown_vk_local(&shared, &mut sink, current_srm.as_deref());
                 *shared
@@ -2453,6 +2491,9 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 let _ = reply.send(());
             }
             Command::SetPaused(want_paused, reply) => {
+                if want_paused {
+                    shared.rewinding.store(false, Ordering::Release);
+                }
                 let vk_active = shared.vk_local_active.load(Ordering::Acquire);
                 let have_core = proc.is_some() || vk_active;
                 // Ida e volta: espera o filho confirmar. Sem isso o
@@ -2628,6 +2669,78 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                     });
                 } else if let Some(p) = proc.as_ref() {
                     let _ = p.channel.send(&ToChild::SetCheats(cheats), &[]);
+                }
+                let _ = reply.send(());
+            }
+            Command::ConfigureRewind(enabled, budget_bytes, stride, reply) => {
+                if !enabled || stride == 0 {
+                    shared.rewinding.store(false, Ordering::Release);
+                }
+                if shared.vk_local_active.load(Ordering::Acquire) {
+                    if let Some(lc) = shared
+                        .vk_local
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .as_mut()
+                    {
+                        lc.configure_rewind(enabled, budget_bytes, stride);
+                    }
+                } else if let Some(p) = proc.as_ref() {
+                    let _ = p.channel.send(
+                        &ToChild::ConfigureRewind {
+                            enabled,
+                            budget_bytes,
+                            stride,
+                        },
+                        &[],
+                    );
+                }
+                let _ = reply.send(());
+            }
+            Command::SetRewinding(active, reply) => {
+                let prev = shared.rewinding.swap(active, Ordering::AcqRel);
+                if prev != active {
+                    if let Some(s) = sink.as_mut() {
+                        s.clear();
+                    }
+                    shared
+                        .audio
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .clear();
+                    shared
+                        .vk_local_audio
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .clear();
+                }
+                if shared.vk_local_active.load(Ordering::Acquire) {
+                    if let Some(lc) = shared
+                        .vk_local
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .as_mut()
+                    {
+                        lc.set_rewinding(active);
+                    }
+                } else if let Some(p) = proc.as_ref() {
+                    let _ = p.channel.send(&ToChild::SetRewinding(active), &[]);
+                }
+                let _ = reply.send(());
+            }
+            Command::ClearRewind(reply) => {
+                shared.rewinding.store(false, Ordering::Release);
+                if shared.vk_local_active.load(Ordering::Acquire) {
+                    if let Some(lc) = shared
+                        .vk_local
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .as_mut()
+                    {
+                        lc.clear_rewind();
+                    }
+                } else if let Some(p) = proc.as_ref() {
+                    let _ = p.channel.send(&ToChild::ClearRewind, &[]);
                 }
                 let _ = reply.send(());
             }

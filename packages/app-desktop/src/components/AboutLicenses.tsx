@@ -186,6 +186,12 @@ export function AboutLicenses() {
         </Body1>
       </Section>
 
+      <Section title={t('about.cheats.title')}>
+        <Body1 as="p" className={s.p}>
+          {t('about.cheats.body')}
+        </Body1>
+      </Section>
+
       <Section title={t('about.libs.title')} wide>
         <div className={s.cols}>
           <div className={s.card}>
@@ -198,6 +204,7 @@ export function AboutLicenses() {
                 ['SQLite', t('about.libs.publicDomain')],
                 [t('about.libs.selawik'), 'OFL-1.1 (© Microsoft)'],
                 ['libretro.h, libretro_vulkan.h', 'MIT (© The RetroArch team)'],
+                [t('about.libs.libretroDb'), 'CC-BY-SA 4.0'],
               ]}
             />
           </div>

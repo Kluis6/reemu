@@ -177,16 +177,15 @@ pub async fn load_game(
     }
 
     // RetroAchievements: liga o cliente na memória do core. Em modo Hardcore,
-    // cheats e carregamento de save states ficam desativados nesta sessão.
+    // cheats, rewind e carregamento de save states ficam desativados nesta sessão.
     let hardcore_ra =
         crate::ra::on_game_launched(&app, Some(&core_id), rom_id.as_deref(), &rom_path).await;
 
-    // Cheats ligados deste jogo (doc 17): pulados em sessões Hardcore.
-    if !hardcore_ra {
-        if let Some(rid) = rom_id.as_deref() {
-            super::cheats::apply_cheats(&state, rid).await;
-        }
-    }
+    // Cheats deste jogo (doc 17): em Hardcore manda lista vazia (`reset`).
+    super::cheats::apply_cheats(&state, hardcore_ra, rom_id.as_deref()).await;
+
+    // Rewind em tempo real (doc 17, fase 3): configurado conforme sistema/core e Hardcore.
+    super::apply_rewind_for_session(&app, hardcore_ra, rom_id.as_deref(), &core_id).await;
 
     // Proporção da imagem (rom → sistema → todos, ou a do core).
     apply_resolved_aspect(&state, rom_id.as_deref()).await;
@@ -602,6 +601,7 @@ pub async fn download_bezel_pack(
 
 #[tauri::command]
 pub async fn unload_game(app: AppHandle) -> Result<(), AppError> {
+    super::stop_rewinding_if_active(&app);
     let state = app.state::<AppState>();
     let session = Arc::clone(&state.session);
     // A ROM que fecha: a passada do cloud save depois do unload é dela.

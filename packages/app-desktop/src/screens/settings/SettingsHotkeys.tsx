@@ -17,6 +17,7 @@ const HOTKEY_ACTIONS = [
   'toggle_menu_overlay',
   'quick_save',
   'quick_load',
+  'rewind',
   'capture_screenshot',
   'toggle_audio_note',
   'toggle_video_recording',

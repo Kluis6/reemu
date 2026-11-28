@@ -1,10 +1,18 @@
+import { RewindRegular } from "@fluentui/react-icons";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { ConflictDialog } from "../components/sync/ConflictDialog";
 import { useFocusBridge } from "../hooks/useFocusBridge";
 import { useKeyboardInput } from "../hooks/useKeyboardInput";
-import { nativeVideoActive, nativeVideoOverlay, toggleFocus, unloadGame } from "../lib/tauri";
+import {
+  nativeVideoActive,
+  nativeVideoOverlay,
+  onRewindState,
+  toggleFocus,
+  unloadGame,
+} from "../lib/tauri";
 import { useFocusStore } from "../stores/useFocusStore";
 import { LaunchError, LaunchSplash, NoTarget } from "./play/LaunchScreens";
 import { PauseMenu } from "./play/PauseMenu";
@@ -22,8 +30,10 @@ import { usePauseBackground } from "./play/usePauseBackground";
  * e de erro (`LaunchScreens`).
  */
 export function PlayScreen() {
+  const { t } = useTranslation();
   const styles = usePlayStyles();
   const navigate = useNavigate();
+  const [rewinding, setRewinding] = useState(false);
   // Vídeo numa surface nativa atrás da webview → esta tela fica transparente e
   // não roda o loop do canvas.
   const nativeVideo =
@@ -72,6 +82,21 @@ export function PlayScreen() {
     document.documentElement.classList.add("native-video");
     return () => document.documentElement.classList.remove("native-video");
   }, [nativeVideo]);
+
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    let alive = true;
+    void onRewindState((active) => {
+      if (alive) setRewinding(active);
+    }).then((fn) => {
+      if (alive) off = fn;
+      else fn();
+    });
+    return () => {
+      alive = false;
+      off?.();
+    };
+  }, []);
 
   const menuOpen = focus === "MenuFocused";
   const pauseBg = usePauseBackground(menuOpen, nativeVideo, overlay);
@@ -136,6 +161,12 @@ export function PlayScreen() {
       {pauseBg.mounted && nativeVideo && !overlay && (
         <div className={styles.pauseLayer} aria-hidden>
           {pauseBg.bg && <img className={styles.pauseBg} src={pauseBg.bg} alt="" />}
+        </div>
+      )}
+      {rewinding && !menuOpen && (
+        <div className={styles.rewindBadge} role="status" aria-live="polite">
+          <RewindRegular />
+          <span>{t("play.rewinding")}</span>
         </div>
       )}
       <PauseMenu open={menuOpen} romId={romId} onResume={resume} onQuit={quit} />
