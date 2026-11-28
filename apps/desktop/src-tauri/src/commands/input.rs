@@ -46,6 +46,7 @@ pub fn input_key(
         } else {
             input_desktop::held::release(&kev);
         }
+        poll_hotkeys(&app);
     }
 
     let game_focused = state

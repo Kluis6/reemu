@@ -307,3 +307,66 @@ fn recycled_frame_buffer_is_reused() {
 
     s.unload().unwrap();
 }
+
+#[test]
+fn rewind_steps_frames_backwards_mutes_audio_and_clears_on_restore() {
+    use domain::frame_source::FrameOrigin;
+    let _g = lock();
+    let s = session();
+    load(&s, &rom()).expect("load");
+    s.configure_rewind(true, 32 * 1024 * 1024, 1);
+
+    let first_pixel_u16 = |f: &domain::frame_source::Frame| match &f.origin {
+        FrameOrigin::SoftwareRawBuffer { data, .. } => u16::from_le_bytes([data[0], data[1]]),
+        _ => panic!("esperado quadro software"),
+    };
+
+    // Avança alguns quadros normais (testcore pinta `frame_n * 111 + 1` em RGB565).
+    let mut forward_colors = Vec::new();
+    for _ in 0..10 {
+        s.wait_for_frame(Duration::from_millis(200));
+        if let Some(f) = s.take_latest_frame() {
+            forward_colors.push(first_pixel_u16(&f));
+            s.recycle_frame(f);
+        }
+    }
+    assert!(forward_colors.len() >= 6);
+    assert!(!s.drain_audio().is_empty(), "modo normal produz áudio");
+    let snap_mid = s.save_state().unwrap().expect("save_state");
+
+    // Liga o rewind: o áudio é limpo/silenciado e os quadros voltam a cores anteriores.
+    s.set_rewinding(true);
+    assert!(s.is_rewinding());
+    let _ = s.take_latest_frame();
+    let mut rewound_colors = Vec::new();
+    for _ in 0..5 {
+        s.wait_for_frame(Duration::from_millis(200));
+        if let Some(f) = s.take_latest_frame() {
+            rewound_colors.push(first_pixel_u16(&f));
+            s.recycle_frame(f);
+        }
+    }
+    assert!(!rewound_colors.is_empty());
+    assert!(
+        s.drain_audio().is_empty(),
+        "durante o rewind o áudio deve ficar completamente mudo"
+    );
+    // Algum quadro rebobinado deve corresponder a um estado anterior já visto.
+    assert!(
+        rewound_colors.iter().any(|c| forward_colors.contains(c)),
+        "esperava voltar a cores anteriores ({forward_colors:?}), veio {rewound_colors:?}"
+    );
+
+    // Solta o rewind: retoma execução normal e volta a emitir áudio.
+    s.set_rewinding(false);
+    assert!(!s.is_rewinding());
+    sleep(Duration::from_millis(120));
+    assert!(
+        !s.drain_audio().is_empty(),
+        "áudio volta ao soltar o rewind"
+    );
+
+    // `restore_state` externo descarta o histórico sem quebrar a sessão.
+    assert!(s.restore_state(snap_mid).unwrap());
+    s.unload().unwrap();
+}

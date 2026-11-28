@@ -48,6 +48,10 @@ pub trait AudioSink {
     fn pause(&mut self);
     fn resume(&mut self);
 
+    /// Descarta amostras ainda na fila de saída e no resampler (ex.: ao entrar
+    /// ou sair do rewind, para não tocar sobra de áudio).
+    fn clear(&mut self) {}
+
     /// Troca de dispositivo em runtime. Se o device_id salvo não for
     /// encontrado, o adapter deve cair pro padrão do sistema e notificar
     /// via toast (decisão: Abordagem B, fallback + aviso não-bloqueante).

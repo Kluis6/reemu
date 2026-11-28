@@ -11,6 +11,8 @@ test-fixtures = []
 
 [dependencies]
 domain = { path = "../domain" }
+# Compressão rápida dos deltas XOR do buffer circular de rewind em RAM (doc 17).
+flate2 = "1"
 libloading = "0.8"
 thiserror.workspace = true
 async-trait.workspace = true

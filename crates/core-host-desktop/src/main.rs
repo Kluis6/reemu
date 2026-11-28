@@ -12,7 +12,9 @@
 #[cfg(unix)]
 use core_ipc::HwPlaneMeta;
 use core_ipc::{Channel, FrameKind, PortInput, ToChild, ToParent};
-use core_loader_desktop::{DesktopCore, DesktopCoreLoader, PaceStats, Pacer, RateMatch};
+use core_loader_desktop::{
+    DesktopCore, DesktopCoreLoader, PaceStats, Pacer, RateMatch, RewindController,
+};
 use domain::core_loader::{CoreId, LoadedCore};
 use domain::frame_source::{FrameOrigin, FrameSource};
 #[cfg(unix)]
@@ -449,6 +451,7 @@ impl LoopDiag {
 
 fn run(channel: Channel, rx: Receiver<ToChild>) {
     let mut core: Option<DesktopCore> = None;
+    let mut rewind = RewindController::default();
     let mut ra: Option<achievements::LiveRuntime> = None;
     let mut ra_mem_gen = 0u64;
     let mut ring: Option<core_ipc::FrameRing> = None;
@@ -472,7 +475,7 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                     Err(mpsc::RecvTimeoutError::Timeout) => {
                         if let (Some(rt), Some(c)) = (ra.as_mut(), core.as_mut()) {
                             let drain = rt.idle();
-                            flush_ra_drain(&channel, c, drain);
+                            flush_ra_drain(&channel, c, &mut rewind, drain);
                         }
                         continue;
                     }
@@ -494,6 +497,7 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
             }
             run_one_frame(
                 &mut core,
+                &mut rewind,
                 &mut ra,
                 &mut ra_mem_gen,
                 &channel,
@@ -526,6 +530,7 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                 core_loader_desktop::set_vk_interop(vk_interop.map(|b| *b));
                 core_loader_desktop::silence_core_stdout();
                 core_loader_desktop::set_pending_core_option_values(initial_option_values);
+                rewind.clear();
                 let mut loader = DesktopCoreLoader::new(cores_dir, system_dir, save_dir);
                 if vulkan_in_child {
                     // C3: o core Vulkan roda aqui, com device próprio.
@@ -620,6 +625,9 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                 }
             }
             ToChild::SetPaused(p) => {
+                if p {
+                    rewind.set_rewinding(false);
+                }
                 if paused != p {
                     if let Some(c) = core.as_mut() {
                         c.reset_frame_time();
@@ -635,6 +643,19 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                 if let Some(c) = core.as_mut() {
                     c.set_cheats(&cheats);
                 }
+            }
+            ToChild::ConfigureRewind {
+                enabled,
+                budget_bytes,
+                stride,
+            } => {
+                rewind.configure(enabled, budget_bytes, stride);
+            }
+            ToChild::SetRewinding(active) => {
+                rewind.set_rewinding(active);
+            }
+            ToChild::ClearRewind => {
+                rewind.clear();
             }
             ToChild::SaveState => {
                 let bytes =
@@ -653,6 +674,7 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                     .map(|c| c.restore_state(core_bytes))
                     .unwrap_or(false);
                 if ok {
+                    rewind.clear();
                     if let Some(rt) = ra.as_mut() {
                         rt.restore_progress(progress);
                     }
@@ -751,7 +773,7 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                     };
                     match achievements::LiveRuntime::start(*cfg, mem) {
                         Ok((rt, drain)) => {
-                            flush_ra_drain(&channel, c, drain);
+                            flush_ra_drain(&channel, c, &mut rewind, drain);
                             ra = Some(rt);
                         }
                         Err(e) => {
@@ -768,7 +790,7 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
             } => {
                 if let (Some(rt), Some(c)) = (ra.as_mut(), core.as_mut()) {
                     let drain = rt.on_http_response(request_id, status_code, &body);
-                    flush_ra_drain(&channel, c, drain);
+                    flush_ra_drain(&channel, c, &mut rewind, drain);
                 }
             }
             ToChild::Shutdown => break,
@@ -825,6 +847,7 @@ fn apply_input(ports: &[PortInput; 4]) {
 #[allow(clippy::too_many_arguments)]
 fn run_one_frame(
     core: &mut Option<DesktopCore>,
+    rewind: &mut RewindController,
     ra: &mut Option<achievements::LiveRuntime>,
     ra_mem_gen: &mut u64,
     channel: &Channel,
@@ -855,26 +878,29 @@ fn run_one_frame(
         d.frame_start(now);
         now
     });
-    let produced = c.next_realtime_frame();
+    let step = rewind.step_realtime(c);
+    let produced = step.frame;
     if let (Some(d), Some(t0)) = (diag.as_mut(), t0) {
         d.record_frame(t0.elapsed(), pacer.budget(), produced.is_none());
     }
-    if let Some(rt) = ra.as_mut() {
-        let cur_gen = c.memory_map_generation();
-        let needs_rebind = cur_gen != *ra_mem_gen
-            || (!rt.has_valid_memory() && !c.core_memory_region(2).0.is_null());
-        if needs_rebind {
-            *ra_mem_gen = cur_gen;
-            let descs = memory_descriptors_for_ra(c);
-            let mem = unsafe {
-                achievements::LibretroMemory::init(rt.console_id(), &descs, |id| {
-                    c.core_memory_region(id)
-                })
-            };
-            rt.update_memory(mem);
+    if !step.rewound {
+        if let Some(rt) = ra.as_mut() {
+            let cur_gen = c.memory_map_generation();
+            let needs_rebind = cur_gen != *ra_mem_gen
+                || (!rt.has_valid_memory() && !c.core_memory_region(2).0.is_null());
+            if needs_rebind {
+                *ra_mem_gen = cur_gen;
+                let descs = memory_descriptors_for_ra(c);
+                let mem = unsafe {
+                    achievements::LibretroMemory::init(rt.console_id(), &descs, |id| {
+                        c.core_memory_region(id)
+                    })
+                };
+                rt.update_memory(mem);
+            }
+            let drain = rt.do_frame();
+            flush_ra_drain(channel, c, rewind, drain);
         }
-        let drain = rt.do_frame();
-        flush_ra_drain(channel, c, drain);
     }
     // 1ª leitura de analógico pelo core → avisa o pai (uma vez por processo;
     // cada jogo roda num filho novo).
@@ -907,7 +933,7 @@ fn run_one_frame(
         }
     }
 
-    let audio = c.drain_audio();
+    let audio = step.audio;
     if let Some(d) = diag.as_mut() {
         d.audio_samples += audio.len() as u64;
         d.maybe_report(*core_sample_rate, pacer.budget());
@@ -1047,8 +1073,14 @@ fn memory_descriptors_for_ra(core: &DesktopCore) -> Vec<achievements::MemoryDesc
         .collect()
 }
 
-fn flush_ra_drain(channel: &Channel, core: &mut DesktopCore, drain: achievements::RuntimeDrain) {
+fn flush_ra_drain(
+    channel: &Channel,
+    core: &mut DesktopCore,
+    rewind: &mut RewindController,
+    drain: achievements::RuntimeDrain,
+) {
     if drain.reset_core {
+        rewind.clear();
         core.reset_core();
     }
     for warn in drain.warnings {

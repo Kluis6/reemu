@@ -148,6 +148,44 @@ impl DesktopCore {
         ok.then_some(buf)
     }
 
+    /// Tamanho reportado por `retro_serialize_size` sob contexto de rewind
+    /// (`RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE`). `0` quando o core
+    /// não suporta ou ainda está iniciando (`MUST_INITIALIZE`).
+    pub fn rewind_serialize_size(&mut self) -> usize {
+        with_savestate_context(
+            sys::RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE,
+            || unsafe { (self.raw.serialize_size)() },
+        )
+    }
+
+    /// Serializa o estado no buffer `out` (já dimensionado com o tamanho
+    /// retornado por [`Self::rewind_serialize_size`]) usando o contexto rápido
+    /// `RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE`. O contexto volta para
+    /// `NORMAL` ao sair.
+    pub fn serialize_rewind_into(&mut self, out: &mut [u8]) -> bool {
+        if out.is_empty() {
+            return false;
+        }
+        with_savestate_context(
+            sys::RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE,
+            || unsafe { (self.raw.serialize)(out.as_mut_ptr().cast(), out.len()) },
+        )
+    }
+
+    /// Restaura um estado do buffer de rewind sob `RUNAHEAD_SAME_INSTANCE`.
+    pub fn restore_rewind_state(&mut self, data: &[u8]) -> bool {
+        if data.is_empty() {
+            return false;
+        }
+        with_savestate_context(
+            sys::RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE,
+            || unsafe {
+                let _ = (self.raw.serialize_size)();
+                (self.raw.unserialize)(data.as_ptr().cast(), data.len())
+            },
+        )
+    }
+
     /// Troca a lista de cheats: `retro_cheat_reset` ("Reset all the active
     /// cheats to their default disabled state") e um `retro_cheat_set` por
     /// cheat ligado, com a posição na lista como `index`. O core decide se
@@ -290,6 +328,32 @@ impl DesktopCore {
             1.0
         }
     }
+}
+
+struct SavestateContextReset(std::os::raw::c_int);
+
+impl Drop for SavestateContextReset {
+    fn drop(&mut self) {
+        if let Some(st) = ffi_state::lock().as_mut() {
+            st.savestate_context = self.0;
+        }
+    }
+}
+
+fn with_savestate_context<R>(ctx: std::os::raw::c_int, f: impl FnOnce() -> R) -> R {
+    let prev = {
+        let mut g = ffi_state::lock();
+        match g.as_mut() {
+            Some(st) => {
+                let p = st.savestate_context;
+                st.savestate_context = ctx;
+                p
+            }
+            None => sys::RETRO_SAVESTATE_CONTEXT_NORMAL,
+        }
+    };
+    let _reset = SavestateContextReset(prev);
+    f()
 }
 
 impl FrameSource for DesktopCore {

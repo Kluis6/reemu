@@ -54,6 +54,9 @@ pub const RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT: c_uint = 72 | RETRO_ENVIRONME
 /// `enum retro_savestate_context`: estado escrito em disco ("May be loaded at
 /// any time, even in a separate session or on another device").
 pub const RETRO_SAVESTATE_CONTEXT_NORMAL: c_int = 0;
+/// `enum retro_savestate_context`: estado na mesma instância de sessão e
+/// espaço de endereços ("implies the use of runahead or rewinding", libretro.h).
+pub const RETRO_SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE: c_int = 1;
 pub const RETRO_ENVIRONMENT_SET_GEOMETRY: c_uint = 37;
 pub const RETRO_ENVIRONMENT_GET_LANGUAGE: c_uint = 39;
 pub const RETRO_ENVIRONMENT_GET_PREFERRED_HW_RENDER: c_uint = 56;

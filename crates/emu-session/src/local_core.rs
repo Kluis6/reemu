@@ -15,7 +15,7 @@
 //! `ToParent` por IPC.
 
 use core_ipc::PortInput;
-use core_loader_desktop::{DesktopCore, DesktopCoreLoader, Pacer};
+use core_loader_desktop::{DesktopCore, DesktopCoreLoader, Pacer, RewindController};
 use domain::core_loader::{CoreId, CoreLoadError, LoadedCore, RenderBackend, SystemAvInfo};
 use domain::core_options::CoreOptionDefinition;
 use domain::frame_source::Frame;
@@ -34,6 +34,7 @@ pub(crate) struct FrameTick {
 
 pub(crate) struct LocalCore {
     core: DesktopCore,
+    rewind: RewindController,
     ra: Option<achievements::LiveRuntime>,
     ra_mem_gen: u64,
     pacer: Pacer,
@@ -96,6 +97,7 @@ impl LocalCore {
         Ok((
             Self {
                 core,
+                rewind: RewindController::default(),
                 ra: None,
                 ra_mem_gen: 0,
                 pacer: Pacer::new(Duration::from_secs_f64(1.0 / fps)),
@@ -136,45 +138,51 @@ impl LocalCore {
             );
         }
 
-        let frame = self.core.next_realtime_frame();
-        let ra_drain = if let Some(rt) = self.ra.as_mut() {
-            let cur_gen = self.core.memory_map_generation();
-            let needs_rebind = cur_gen != self.ra_mem_gen
-                || (!rt.has_valid_memory() && !self.core.core_memory_region(2).0.is_null());
-            if needs_rebind {
-                self.ra_mem_gen = cur_gen;
-                let descs: Vec<achievements::MemoryDescriptorInput> = self
-                    .core
-                    .memory_descriptors()
-                    .into_iter()
-                    .map(|d| achievements::MemoryDescriptorInput {
-                        flags: d.flags,
-                        ptr: d.ptr,
-                        offset: d.offset,
-                        start: d.start,
-                        select: d.select,
-                        disconnect: d.disconnect,
-                        len: d.len,
-                        addrspace: d.addrspace,
-                    })
-                    .collect();
-                let mem = unsafe {
-                    achievements::LibretroMemory::init(rt.console_id(), &descs, |id| {
-                        self.core.core_memory_region(id)
-                    })
-                };
-                rt.update_memory(mem);
+        let step = self.rewind.step_realtime(&mut self.core);
+        let frame = step.frame;
+        let ra_drain = if !step.rewound {
+            if let Some(rt) = self.ra.as_mut() {
+                let cur_gen = self.core.memory_map_generation();
+                let needs_rebind = cur_gen != self.ra_mem_gen
+                    || (!rt.has_valid_memory() && !self.core.core_memory_region(2).0.is_null());
+                if needs_rebind {
+                    self.ra_mem_gen = cur_gen;
+                    let descs: Vec<achievements::MemoryDescriptorInput> = self
+                        .core
+                        .memory_descriptors()
+                        .into_iter()
+                        .map(|d| achievements::MemoryDescriptorInput {
+                            flags: d.flags,
+                            ptr: d.ptr,
+                            offset: d.offset,
+                            start: d.start,
+                            select: d.select,
+                            disconnect: d.disconnect,
+                            len: d.len,
+                            addrspace: d.addrspace,
+                        })
+                        .collect();
+                    let mem = unsafe {
+                        achievements::LibretroMemory::init(rt.console_id(), &descs, |id| {
+                            self.core.core_memory_region(id)
+                        })
+                    };
+                    rt.update_memory(mem);
+                }
+                let mut d = rt.do_frame();
+                if d.reset_core {
+                    self.rewind.clear();
+                    self.core.reset_core();
+                    d.reset_core = false;
+                }
+                Some(d)
+            } else {
+                None
             }
-            let mut d = rt.do_frame();
-            if d.reset_core {
-                self.core.reset_core();
-                d.reset_core = false;
-            }
-            Some(d)
         } else {
             None
         };
-        let audio = self.core.drain_audio();
+        let audio = step.audio;
         self.pacer.pace();
         FrameTick {
             frame,
@@ -212,6 +220,7 @@ impl LocalCore {
         match achievements::LiveRuntime::start(cfg, mem) {
             Ok((rt, mut drain)) => {
                 if drain.reset_core {
+                    self.rewind.clear();
                     self.core.reset_core();
                     drain.reset_core = false;
                 }
@@ -234,6 +243,7 @@ impl LocalCore {
         let rt = self.ra.as_mut()?;
         let mut drain = rt.on_http_response(request_id, status_code, body);
         if drain.reset_core {
+            self.rewind.clear();
             self.core.reset_core();
             drain.reset_core = false;
         }
@@ -244,6 +254,7 @@ impl LocalCore {
         let rt = self.ra.as_mut()?;
         let mut drain = rt.idle();
         if drain.reset_core {
+            self.rewind.clear();
             self.core.reset_core();
             drain.reset_core = false;
         }
@@ -251,6 +262,9 @@ impl LocalCore {
     }
 
     pub(crate) fn set_paused(&mut self, paused: bool) {
+        if paused {
+            self.rewind.set_rewinding(false);
+        }
         self.core.reset_frame_time();
         if !paused {
             self.pacer.reset();
@@ -270,11 +284,24 @@ impl LocalCore {
         let (core_bytes, progress) = achievements::unpack_state_with_progress(data);
         let ok = self.core.restore_state(core_bytes);
         if ok {
+            self.rewind.clear();
             if let Some(rt) = self.ra.as_mut() {
                 rt.restore_progress(progress);
             }
         }
         ok
+    }
+
+    pub(crate) fn configure_rewind(&mut self, enabled: bool, budget_bytes: usize, stride: u32) {
+        self.rewind.configure(enabled, budget_bytes, stride);
+    }
+
+    pub(crate) fn set_rewinding(&mut self, rewinding: bool) {
+        self.rewind.set_rewinding(rewinding);
+    }
+
+    pub(crate) fn clear_rewind(&mut self) {
+        self.rewind.clear();
     }
 
     pub(crate) fn set_cheats(&mut self, cheats: &[domain::cheats::CheatCode]) {

@@ -1095,6 +1095,7 @@ dependencies = [
  "async-trait",
  "cc",
  "domain",
+ "flate2",
  "glow 0.18.0",
  "khronos-egl",
  "libloading 0.8.9",

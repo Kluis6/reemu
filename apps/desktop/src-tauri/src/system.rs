@@ -37,11 +37,28 @@ pub struct SystemPrefs {
     /// Chave do `input_desktop::pad_source::Driver`; vazio/desconhecido =
     /// automático.
     pub controller_driver: String,
+    /// Rewind em tempo real ligado? Desligado por padrão (doc 17, fase 3).
+    pub rewind_enabled: bool,
+    /// Limite de RAM do buffer de rewind em MiB (`0` = padrão 128 MiB).
+    pub rewind_budget_mb: u32,
+    /// Atalho padrão (`Backspace`) do rewind já semeado uma vez no banco?
+    pub rewind_hotkey_seeded: bool,
 }
 
 impl SystemPrefs {
     pub fn controller_driver(&self) -> Driver {
         Driver::from_key(&self.controller_driver).unwrap_or_default()
+    }
+
+    pub fn effective_rewind_budget_mb(&self) -> u32 {
+        if self.rewind_budget_mb == 0 {
+            domain::rewind::DEFAULT_REWIND_BUDGET_MB
+        } else {
+            self.rewind_budget_mb.clamp(
+                domain::rewind::MIN_REWIND_BUDGET_MB,
+                domain::rewind::MAX_REWIND_BUDGET_MB,
+            )
+        }
     }
 }
 
@@ -72,6 +89,11 @@ pub struct SystemState {
 impl SystemState {
     fn prefs(&self) -> SystemPrefs {
         self.prefs.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    pub fn rewind_prefs(&self) -> (bool, u32) {
+        let p = self.prefs();
+        (p.rewind_enabled, p.effective_rewind_budget_mb())
     }
 
     fn update(&self, f: impl FnOnce(&mut SystemPrefs)) -> Result<(), String> {
@@ -140,6 +162,84 @@ pub fn set_start_fullscreen(state: State<'_, SystemState>, enabled: bool) -> Res
 #[tauri::command]
 pub fn set_minimize_to_tray(state: State<'_, SystemState>, enabled: bool) -> Result<(), String> {
     state.update(|p| p.minimize_to_tray = enabled)
+}
+
+/// Preferências do Rewind em tempo real guardadas em `app-settings.json`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "RewindSettings"))]
+pub struct RewindSettings {
+    pub enabled: bool,
+    pub budget_mb: u32,
+}
+
+#[tauri::command]
+pub fn get_rewind_settings(state: State<'_, SystemState>) -> RewindSettings {
+    let (enabled, budget_mb) = state.rewind_prefs();
+    RewindSettings { enabled, budget_mb }
+}
+
+#[tauri::command]
+pub async fn set_rewind_settings(
+    app: AppHandle,
+    state: State<'_, SystemState>,
+    enabled: bool,
+    budget_mb: u32,
+) -> Result<RewindSettings, String> {
+    let clamped = budget_mb.clamp(
+        domain::rewind::MIN_REWIND_BUDGET_MB,
+        domain::rewind::MAX_REWIND_BUDGET_MB,
+    );
+    state.update(|p| {
+        p.rewind_enabled = enabled;
+        p.rewind_budget_mb = clamped;
+    })?;
+    crate::commands::reapply_rewind_if_running(&app).await;
+    Ok(RewindSettings {
+        enabled,
+        budget_mb: clamped,
+    })
+}
+
+/// Semeia uma única vez o atalho padrão `Backspace` para `SystemAction::Rewind`
+/// sem sobrescrever escolhas existentes do usuário.
+pub async fn seed_rewind_hotkey_once(state: &SystemState, pool: &db::Db) {
+    use domain::hotkeys::{HotkeyBinding, SystemAction, SystemHotkeyRepository};
+    if state.prefs().rewind_hotkey_seeded {
+        return;
+    }
+    let repo = db::SystemHotkeysRepo::new(pool.clone());
+    let Ok(existing) = repo.list().await else {
+        return;
+    };
+    if existing.is_empty() {
+        let _ = repo
+            .set(&HotkeyBinding {
+                action: SystemAction::ToggleMenuOverlay,
+                trigger: vec![domain::input::RawInputEvent::Keyboard {
+                    scancode: input_desktop::keymap::key_scancode("F1"),
+                }],
+                device_guid: None,
+            })
+            .await;
+    }
+    let backspace = domain::input::RawInputEvent::Keyboard {
+        scancode: input_desktop::keymap::key_scancode("Backspace"),
+    };
+    let already_has_rewind = existing.iter().any(|b| b.action == SystemAction::Rewind);
+    let backspace_taken = existing
+        .iter()
+        .any(|b| b.trigger.len() == 1 && b.trigger[0] == backspace);
+    if !already_has_rewind && !backspace_taken {
+        let _ = repo
+            .set(&HotkeyBinding {
+                action: SystemAction::Rewind,
+                trigger: vec![backspace],
+                device_guid: None,
+            })
+            .await;
+    }
+    let _ = state.update(|p| p.rewind_hotkey_seeded = true);
 }
 
 /// Driver de controle atual e se dá pra escolher neste sistema.

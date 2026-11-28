@@ -47,6 +47,16 @@ pub enum ToChild {
         vulkan_in_child: bool,
     },
     SetPaused(bool),
+    /// Configura o buffer circular de rewind em RAM deste processo (doc 17, fase 3).
+    ConfigureRewind {
+        enabled: bool,
+        budget_bytes: usize,
+        stride: u32,
+    },
+    /// Liga ou desliga o retrocesso quadro a quadro (atalho de segurar).
+    SetRewinding(bool),
+    /// Descarta todo o histórico de rewind em RAM.
+    ClearRewind,
     SaveState,
     RestoreState(Vec<u8>),
     /// Lista de cheats do jogo (doc 17): o filho troca a do core.

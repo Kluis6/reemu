@@ -29,6 +29,7 @@ mod input;
 mod loader;
 pub mod pacing;
 mod raw;
+pub mod rewind;
 mod sys;
 mod vfs;
 mod vk_context;
@@ -45,6 +46,7 @@ pub use crate::coreopts::{
 pub use crate::discover::{core_version, discover_cores, installed_core_ids, DiscoveredCore};
 pub use crate::execstack::{core_file, exec_stack_env};
 pub use crate::ffi_state::{memory_descriptors, serialization_quirks, MemoryDescriptor};
+pub use crate::rewind::{RewindBuffer, RewindController, RewindStepOutcome};
 /// Lista de modificadores DRM que o Vulkan do app importa (negociação do
 /// `VK_EXT_image_drm_format_modifier`) — o alocador GBM do interop GL usa.
 /// No-op fora do Unix.

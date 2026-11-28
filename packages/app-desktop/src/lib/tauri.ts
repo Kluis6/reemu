@@ -62,6 +62,7 @@ import { isWallpaperId, type WallpaperId } from './wallpapers'
 import type { ShaderPackStatus } from './bindings/ShaderPackStatus'
 import type { ShaderParam } from './bindings/ShaderParam'
 import type { SlangpEntry } from './bindings/SlangpEntry'
+import type { RewindSettings } from './bindings/RewindSettings'
 import type { SystemSettings } from './bindings/SystemSettings'
 import type { UpdateInfo } from './bindings/UpdateInfo'
 import type { VideoConfig } from './bindings/VideoConfig'
@@ -124,8 +125,16 @@ export const nativeVideoActive = () => invoke<boolean>('native_video_active')
 export const nativeVideoOverlay = () => invoke<boolean>('native_video_overlay')
 
 // Configurações › Sistema (src-tauri/src/system.rs).
-export type { SystemSettings }
+export type { RewindSettings, SystemSettings }
 export const getSystemSettings = () => invoke<SystemSettings>('get_system_settings')
+export const getRewindSettings = () => invoke<RewindSettings>('get_rewind_settings')
+export const setRewindSettings = (enabled: boolean, budgetMb: number) =>
+  invoke<RewindSettings>('set_rewind_settings', { enabled, budgetMb })
+export async function onRewindState(cb: (active: boolean) => void): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<{ active: boolean }>('rewind-state', (e) => cb(e.payload.active))
+}
 
 /** Configurações › Sistema › Hardware (`commands/hardware.rs`). */
 export type { HardwareInfo }
@@ -499,6 +508,15 @@ export function pickSlangp(): Promise<string | null> {
   })
 }
 
+/** Diálogo de seleção de arquivo `.cht` (libretro cheat). */
+export function pickChtFile(): Promise<string | null> {
+  return pickPath({
+    title: i18n.t('dialogs.pickCht'),
+    extensions: ['cht'],
+    filterName: 'libretro cheat (.cht)',
+  })
+}
+
 export type { SaveState }
 /** JSON da escolha de tema salva no Rust (`""` se nunca escolheu). */
 export const getThemeSelection = () => invoke<string>('get_theme_selection')
@@ -532,6 +550,10 @@ export const addCheat = (romId: string, description: string, code: string) =>
 export const updateCheat = (id: number, description: string, code: string, enabled: boolean) =>
   invoke<Cheat>('update_cheat', { id, description, code, enabled })
 export const deleteCheat = (id: number) => invoke<void>('delete_cheat', { id })
+export const importCheatsCht = (romId: string, path: string) =>
+  invoke<number>('import_cheats_cht', { romId, path })
+export const downloadLibretroCheats = (romId: string) =>
+  invoke<number>('download_libretro_cheats', { romId })
 export const loadSaveState = (stateId: string) =>
   invoke<void>('load_save_state', { stateId })
 export const deleteSaveState = (stateId: string) =>
@@ -1013,6 +1035,7 @@ export type SystemActionKey =
   | 'toggle_menu_overlay'
   | 'quick_save'
   | 'quick_load'
+  | 'rewind'
   | 'capture_screenshot'
   | 'toggle_audio_note'
   | 'toggle_video_recording'

@@ -125,6 +125,8 @@ pub fn run() {
                 .unwrap_or_default();
             if let Some(pool) = db.as_ref() {
                 tauri::async_runtime::block_on(gamelog::seed_default_hotkeys_once(&base, pool));
+                let sys_state = app.state::<system::SystemState>();
+                tauri::async_runtime::block_on(system::seed_rewind_hotkey_once(&sys_state, pool));
             }
             let hotkeys = db
                 .as_ref()
@@ -491,6 +493,8 @@ pub fn run() {
             system::set_autostart,
             system::set_start_fullscreen,
             system::set_minimize_to_tray,
+            system::get_rewind_settings,
+            system::set_rewind_settings,
             system::get_controller_driver,
             system::set_controller_driver,
             system::set_tray_labels,
@@ -543,6 +547,8 @@ pub fn run() {
             commands::add_cheat,
             commands::update_cheat,
             commands::delete_cheat,
+            commands::import_cheats_cht,
+            commands::download_libretro_cheats,
             commands::load_save_state,
             commands::delete_save_state,
             commands::read_save_thumbnail,
