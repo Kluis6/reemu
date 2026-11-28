@@ -156,6 +156,8 @@ fn screenscraper_system_id(system_id: &str) -> Option<u32> {
         "laserdisc" => 49, // Daphne no catálogo ScreenScraper
         "arduboy" => 263,
         "megaduck" => 90,
+        "arcadia" => 94,
+        "vc4000" => 281,
         "uzebox" => 216,
         "dos" => 135,
         "scummvm" => 123,
@@ -217,6 +219,8 @@ fn thegamesdb_platforms(system_id: &str) -> Option<&'static str> {
         "x68000" => "4931",
         "amstradcpc" => "4914",
         "megaduck" => "4948",
+        "arcadia" => "4963",
+        "vc4000" => "4994",
         "dos" | "scummvm" => "1",
         _ => return None,
     })
@@ -1296,13 +1300,14 @@ mod tests {
         // Catálogos oficiais:
         // https://www.screenscraper.fr/systemesinfos.php
         // https://thegamesdb.net/list_platforms.php
-        assert_eq!(no_ss, ["chip8", "gametank", "vaporspec"]);
+        assert_eq!(no_ss, ["chip8", "elektor", "gametank", "vaporspec"]);
         // O catálogo do TGDB tem Pioneer LaserActive, que é outra plataforma.
         assert_eq!(
             no_tgdb,
             [
                 "arduboy",
                 "chip8",
+                "elektor",
                 "gametank",
                 "laserdisc",
                 "uzebox",
